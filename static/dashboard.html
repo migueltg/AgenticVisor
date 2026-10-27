@@ -368,7 +368,7 @@
             <th data-sort="category">Category</th>
             <th data-sort="path">Session / path</th>
             <th data-sort="size_bytes">Size</th>
-            <th data-sort="item_count">Ficheros</th>
+            <th data-sort="item_count">Files</th>
             <th data-sort="last_modified">Last modified</th>
             <th></th>
           </tr>
@@ -1517,7 +1517,7 @@ function claudeArtifactCard(a) {
   return `
     <article class="ext-card">
       <div class="ext-name">${escapeHtml(a.title)}</div>
-      <div><span class="chip" title="${escapeAttr(a.project)}">${escapeHtml(a.project || "proyecto desconocido")}</span></div>
+      <div><span class="chip" title="${escapeAttr(a.project)}">${escapeHtml(a.project || "unknown project")}</span></div>
       <div class="ext-desc">${escapeHtml(a.description || "No description")}</div>
       <div class="ext-meta">publicado ${escapeHtml(a.date)}</div>
       <div class="ext-foot">

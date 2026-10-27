@@ -59,7 +59,7 @@ fn dashed_folder_names_resolve_against_disk() {
     let project = base.join("my-app");
     fs::create_dir_all(&project).unwrap();
     let folder = base.to_string_lossy().trim_start_matches('/').replace('/', "-") + "-my-app";
-    let resolved = resolve_dashed_path(&folder, "/").expect("debe resolver");
+    let resolved = resolve_dashed_path(&folder, "/").expect("must resolve");
     assert_eq!(Path::new(&resolved), project.as_path());
     assert!(resolve_dashed_path("Users-nobody-zzz-does-not-exist", "/").is_none());
 }
@@ -83,7 +83,7 @@ fn streamed_responses_are_counted_once() {
     let file = dir.join("s.jsonl");
     let line = r#"{"type":"assistant","uuid":"u1","message":{"id":"msg_1","model":"claude-x","usage":{"input_tokens":10,"output_tokens":5,"cache_read_input_tokens":100,"cache_creation_input_tokens":7}}}"#;
     write(&file, &format!("{line}\n{line}\n{line}\n"));
-    let usage = parse_session(&file).expect("debe tener uso");
+    let usage = parse_session(&file).expect("must have usage");
     let tokens = usage.by_model["claude-x"];
     assert_eq!(usage.responses, 1);
     assert_eq!((tokens.input, tokens.output, tokens.cache_read, tokens.cache_write), (10, 5, 100, 7));

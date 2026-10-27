@@ -118,7 +118,7 @@ fn scan_projects(root: &Path, home: &Path, out: &mut Vec<Entry>) {
             let mut entry = Entry::new(&jsonl.to_string_lossy(), "claude-code", "sessions", &jsonl.to_string_lossy())
                 .with_stats(size, count, mtime)
                 .title(title)
-                .note(format!("Proyecto: {label}"));
+                .note(format!("Project: {label}"));
             entry.usage = session_usage(&jsonl);
             out.push(entry);
         }
@@ -142,9 +142,9 @@ fn scan_projects(root: &Path, home: &Path, out: &mut Vec<Entry>) {
                 (meta.len(), 1, mtime_secs(&meta))
             };
             let note = if extra.is_empty() {
-                format!("Proyecto: {label}")
+                format!("Project: {label}")
             } else {
-                format!("Proyecto: {label} — {extra}")
+                format!("Project: {label} — {extra}")
             };
             out.push(
                 Entry::new(&item.to_string_lossy(), "claude-code", category, &item.to_string_lossy())

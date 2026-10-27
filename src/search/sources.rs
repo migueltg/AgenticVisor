@@ -219,7 +219,7 @@ pub fn iter_cursor_chat(store_db: &Path) -> Vec<Message> {
 }
 
 /// A Cursor Desktop chat: bubbleId:<chat>:<message> rows of state.vscdb.
-/// type 1 = usuario, 2 = asistente.
+/// type 1 = user, 2 = assistant.
 pub fn iter_cursor_bubbles(state_db: &Path, composer_id: &str) -> Vec<Message> {
     let skip = bubble_skip();
     let Some(con) = read_only(state_db) else {

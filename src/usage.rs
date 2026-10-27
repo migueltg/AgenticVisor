@@ -113,7 +113,7 @@ pub fn parse_session(path: &Path) -> Option<SessionUsage> {
                 let model = message
                     .get("model")
                     .and_then(Value::as_str)
-                    .unwrap_or("desconocido")
+                    .unwrap_or("unknown")
                     .to_string();
                 responses.insert(key, (model, tokens_from(usage)));
             }
