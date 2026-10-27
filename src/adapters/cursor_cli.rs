@@ -80,6 +80,7 @@ fn scan_agent_transcripts(proj: &Path, project_title: &str, out: &mut Vec<Entry>
             Entry::new(&conv.to_string_lossy(), "cursor-cli", "sessions", &conv.to_string_lossy())
                 .with_stats(size, count, mtime)
                 .title(title)
+                .project(project_title)
                 .note(format!("Agent conversation · Project: {project_title}")),
         );
     }
@@ -195,7 +196,7 @@ fn scan_mcp_servers(root: &Path, out: &mut Vec<Entry>) {
             .sensitive(true)
             .informational()
             .title(name.clone())
-            .note(format!("Servidor MCP ({transport}) — solo informativo")),
+            .note(format!("MCP server ({transport}) — informational only")),
         );
     }
 }

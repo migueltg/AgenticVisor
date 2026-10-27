@@ -50,11 +50,14 @@ Options: `--port N`, `--no-browser`, `--version`. Commands: `scan-json` and
 ## What it does
 
 **Overview.** How much space each tool uses, grouped by tool and category, and
-how much is safe to clean.
+how much is safe to clean. It also shows which agents are running right now and
+lists the backups the dashboard made, so you can move them to the trash.
 
 **Per agent (Claude, Cursor).**
 - **Sessions**: conversations, with a readable preview (JSONL, chat databases,
-  plans) and paging.
+  plans) and paging. A Cursor Desktop conversation can be deleted from its
+  preview: only that conversation is removed, after a full copy of Cursor's chat
+  database is saved, and only while Cursor is closed.
 - **Cache**: data the tool regenerates by itself, the safest things to delete.
 - **Orphans**: leftovers from projects that no longer exist on disk.
 - **Configuration**: settings files, with secret values masked. Files without
@@ -65,6 +68,11 @@ how much is safe to clean.
   `settings.json`).
 - **Artifacts and canvases**: publications registered in transcripts and Cursor
   canvases, listed locally.
+
+**Codex and Hermes.** Sessions, configuration files and skills of the Codex CLI
+and the Hermes agent. The Hermes reader is checked against a real installation.
+The Codex reader follows the documented format but has not been checked against
+real Codex sessions yet, so its titles and projects are best effort.
 
 **Search inside conversations.** A local full-text index (SQLite FTS5 with
 trigrams) finds any substring in the text of your sessions, including titles
@@ -78,7 +86,8 @@ transcript repeats it while streaming. Cursor is not included: its chats do not
 store reliable token counters.
 
 **Everything, in one table.** Every detected item, with filters, sorting and
-expandable folders.
+expandable folders. Each row shows when it was created and when it changed, and
+a project filter narrows entries to the working directory they were recorded in.
 
 ## Privacy and safety
 
@@ -88,7 +97,10 @@ expandable folders.
   button and confirm it.
 - **Nothing is deleted directly.** "Move to trash" moves items to the program's
   trash folder, where you can recover them. Emptying the trash is a separate
-  action with its own confirmation.
+  action with its own confirmation. Backups are moved to the trash the same way.
+  The one exception is deleting a Cursor Desktop conversation: only its rows are
+  removed from Cursor's database, after a full copy of the database is saved to
+  the data folder, and the change is refused while Cursor runs.
 - **Backups before every write.** Settings, skills and configuration files are
   copied to the data folder before they change, and every plugin change is
   logged there.
@@ -124,6 +136,9 @@ src/config.rs          configuration catalogue, masking and safe writes
 src/artifacts.rs       Claude publications and Cursor canvases
 src/usage.rs           token usage per session
 src/trash.rs           trash and emptying it
+src/backups.rs         backup inventory, moved to the trash
+src/cursor_chats.rs    deletes one Cursor Desktop conversation
+src/runtime.rs         which agent programs are running
 static/                the interface (one HTML file, no build step) and the editor
 ```
 
@@ -148,6 +163,8 @@ same tests run on Linux, macOS and Windows in continuous integration.
 | macOS (Intel) | Build from source. Not tested. |
 | Linux (x86-64) | Built and tested by CI. Tool locations not verified. |
 | Windows (x86-64) | Built and tested by CI. Tool locations not verified. |
+| Codex CLI | Reader written from the documented format, not yet checked against real sessions. |
+| Hermes agent | Checked against a real installation on macOS. |
 
 Tool data formats are internal to each tool and can change between versions.
 When a format changes, the affected reader needs updating; see

@@ -20,6 +20,11 @@ pub struct Entry {
     pub item_count: u64,
     /// Seconds since the epoch; 0.0 if unknown.
     pub last_modified: f64,
+    /// Seconds since the epoch when the item was created; 0.0 where the platform does not record it.
+    pub created: f64,
+    /// Project the item belongs to, when the tool records a working directory.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
     pub sensitive: bool,
     pub note: String,
     pub title: String,
@@ -40,6 +45,8 @@ impl Entry {
             size_bytes: 0,
             item_count: 0,
             last_modified: 0.0,
+            created: 0.0,
+            project: None,
             sensitive: false,
             note: String::new(),
             title: String::new(),
@@ -52,6 +59,11 @@ impl Entry {
         self.size_bytes = size;
         self.item_count = count;
         self.last_modified = mtime;
+        self
+    }
+
+    pub fn project(mut self, project: impl Into<String>) -> Self {
+        self.project = Some(project.into());
         self
     }
 
@@ -90,10 +102,18 @@ impl Entry {
         } else {
             Value::Null
         };
+        let created_iso = if self.created != 0.0 {
+            chrono::DateTime::from_timestamp(self.created as i64, 0)
+                .map(|dt| dt.with_timezone(&chrono::Local).format("%Y-%m-%d").to_string())
+                .unwrap_or_else(|| "—".to_string())
+        } else {
+            "—".to_string()
+        };
         let mut value = serde_json::to_value(self).unwrap_or(Value::Null);
         if let Value::Object(map) = &mut value {
             map.insert("size_human".into(), json!(human_size(self.size_bytes)));
             map.insert("last_modified_iso".into(), json!(iso));
+            map.insert("created_iso".into(), json!(created_iso));
             map.insert("age_days".into(), age_days);
         }
         value

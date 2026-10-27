@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Adapters for the Codex CLI (`~/.codex`) and the Hermes agent (`~/.hermes`).
+- Creation date next to the last-modified date, and a project filter for
+  entries that record a working directory.
+- Running status per agent program, shown in the overview.
+- Backup inventory in the overview, with moving one, several or all backups to
+  the trash after confirmation.
+- Deleting one Cursor Desktop conversation from its preview, with a full backup
+  of the chat database first. Refused while Cursor runs.
+
+### Changed
+
+- Adapters scan in parallel, so a full scan takes about the same time as before
+  the new adapters were added.
+- The GitHub Actions used by CI and releases now run on Node 24.
+
 ## [0.1.0-beta.1] - 2026-10-27
 
 First public beta. Written in Rust as a single binary with the interface built in.

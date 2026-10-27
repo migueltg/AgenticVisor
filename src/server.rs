@@ -9,7 +9,7 @@ use serde_json::{json, Map, Value};
 use tiny_http::{Header, Method, Request, Response, Server};
 
 use crate::search::index::{self, SharedIndex, MIN_QUERY_CHARS};
-use crate::{artifacts, browse, config, extensions, preview, scanner, trash, usage};
+use crate::{artifacts, backups, browse, config, cursor_chats, extensions, preview, runtime, scanner, trash, usage};
 
 const DASHBOARD_HTML: &str = include_str!("../static/dashboard.html");
 const CM_JSON: &[u8] = include_bytes!("../static/vendor/cm-json.js");
@@ -108,6 +108,25 @@ fn handle_post(mut request: Request, ctx: &Ctx, path: &str) {
             send_json(request, 200, &json!({"results": results}));
         }
         "/api/empty_trash" => send_json(request, 200, &trash::empty_trash(&ctx.trash_dir())),
+        "/api/backups_delete" => {
+            let names: Vec<String> = body
+                .get("names")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|n| n.as_str().map(str::to_string))
+                .collect();
+            send_json(request, 200, &backups::move_to_trash(&ctx.home, &ctx.backups_dir(), &ctx.trash_dir(), &names));
+        }
+        "/api/cursor_chat_delete" => {
+            let running = runtime::is_running(&runtime::process_names(), "cursor-desktop");
+            let response = action(cursor_chats::delete_chat(&ctx.home, &ctx.backups_dir(), str_field(&body, "key"), running));
+            // Rebuild the search index so the deleted conversation stops appearing in results.
+            if response["ok"] == json!(true) {
+                index::start(&ctx.index, ctx.home.clone(), ctx.index_db(), ctx.index_config());
+            }
+            send_json(request, 200, &response);
+        }
         "/api/reindex" => {
             let started = index::start(&ctx.index, ctx.home.clone(), ctx.index_db(), ctx.index_config());
             let mut info = ctx.index_info();
@@ -223,6 +242,8 @@ fn handle_get(request: Request, ctx: &Ctx, path: &str, query: &HashMap<String, S
         "/api/configs" => send_json(request, 200, &json!({"items": config::list(&ctx.home)})),
         "/api/config" => send_json(request, 200, &action(config::read(&ctx.home, q("id")))),
         "/api/artifacts" => send_json(request, 200, &artifacts::inventory(&ctx.home)),
+        "/api/runtime" => send_json(request, 200, &runtime::status(&runtime::process_names())),
+        "/api/backups" => send_json(request, 200, &backups::list(&ctx.backups_dir())),
         "/api/canvas_file" => send_json(request, 200, &action(artifacts::read_canvas(&ctx.home, q("path")))),
         p if p.starts_with("/api/") => send_json(request, 404, &json!({"ok": false, "error": "Route not found"})),
         _ => send_json(request, 404, &json!({"ok": false, "error": "Not found"})),

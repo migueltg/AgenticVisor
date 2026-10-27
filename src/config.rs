@@ -34,7 +34,7 @@ pub struct Entry {
 
 pub const CATALOG: &[Entry] = &[
     Entry { id: "claude-settings", agent: "claude", format: "json", editable: true, label: "Claude Code settings", path: ".claude/settings.json" },
-    Entry { id: "claude-memory", agent: "claude", format: "text", editable: true, label: "Memoria global (CLAUDE.md)", path: ".claude/CLAUDE.md" },
+    Entry { id: "claude-memory", agent: "claude", format: "text", editable: true, label: "Global memory (CLAUDE.md)", path: ".claude/CLAUDE.md" },
     Entry { id: "claude-state", agent: "claude", format: "json", editable: false, label: "Project registry and MCP servers", path: ".claude.json" },
     Entry { id: "claude-desktop", agent: "claude", format: "json", editable: false, label: "Claude Desktop configuration", path: "Library/Application Support/Claude/claude_desktop_config.json" },
     Entry { id: "cursor-hooks", agent: "cursor", format: "json", editable: true, label: "Cursor hooks", path: ".cursor/hooks.json" },

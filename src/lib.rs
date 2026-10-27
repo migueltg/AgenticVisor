@@ -3,13 +3,16 @@
 
 pub mod adapters;
 pub mod backup;
+pub mod backups;
 pub mod browse;
 pub mod entry;
 pub mod fsutil;
 pub mod artifacts;
 pub mod config;
+pub mod cursor_chats;
 pub mod extensions;
 pub mod preview;
+pub mod runtime;
 pub mod scanner;
 pub mod search;
 pub mod server;
