@@ -12,6 +12,7 @@ pub mod config;
 pub mod cursor_chats;
 pub mod extensions;
 pub mod preview;
+pub mod pricing;
 pub mod runtime;
 pub mod scanner;
 pub mod search;

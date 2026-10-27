@@ -1310,15 +1310,23 @@ document.getElementById("reindexBtn").onclick = async () => {
   watchIndex();
 };
 
+// Shows one entry in the table, filtered to its path.
+function openInList(path) {
+  document.getElementById("searchInput").value = path;
+  goTable("all:");
+}
+
 document.getElementById("contentResults").addEventListener("click", (e) => {
   if (e.target.dataset.preview) {
     openPreview(e.target.dataset.preview);
     return;
   }
-  const path = e.target.dataset.openPath;
-  if (!path) return;
-  document.getElementById("searchInput").value = path;
-  goTable("all:");
+  if (e.target.dataset.openPath) openInList(e.target.dataset.openPath);
+});
+
+// The token sessions table in the overview links to the list too.
+document.getElementById("usageDetails").addEventListener("click", (e) => {
+  if (e.target.dataset.openPath) openInList(e.target.dataset.openPath);
 });
 
 // ---- Skills and plugins ----
@@ -1623,10 +1631,14 @@ function fmtNum(n) {
 }
 
 function fmtTokens(n) {
-  if (n >= 1e9) return (n / 1e9).toFixed(2).replace(".", ",") + " mil M";
-  if (n >= 1e6) return (n / 1e6).toFixed(1).replace(".", ",") + " M";
-  if (n >= 1e3) return (n / 1e3).toFixed(1).replace(".", ",") + " k";
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + " B";
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + " M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + " k";
   return String(n);
+}
+
+function money(usd) {
+  return "$" + Number(usd || 0).toFixed(2);
 }
 
 function usageCard(label, value, note) {
@@ -1650,10 +1662,13 @@ async function loadUsage() {
     usageCard("Total tokens", fmtTokens(t.total), `${fmtNum(usage.sessions)} sessions with recorded usage`),
     usageCard("Output (what the model wrote)", fmtTokens(t.output), `Input: ${fmtTokens(t.input)} tokens`),
     usageCard("Cache", fmtTokens(t.cache_read + t.cache_write), `${cacheShare}% of the total: reused context, costs much less than input`),
-    usageCard("Coste registrado", usage.cost_usd == null ? "—" :
-      "$" + usage.cost_usd.toFixed(2).replace(".", ","),
+    usageCard("Estimated cost", money(usage.estimated_cost_usd),
+      `At Anthropic list prices checked ${usage.pricing.checked}. ` +
+      (usage.unpriced_responses ? `${fmtNum(usage.unpriced_responses)} responses with no known price left out. ` : "") +
+      `<a class="open-link" href="${escapeAttr(usage.pricing.source)}" target="_blank" rel="noopener">Price list</a>`),
+    usageCard("Recorded cost", usage.cost_usd == null ? "—" : money(usage.cost_usd),
       usage.cost_usd == null ? "Claude Code recorded no cost for these sessions" :
-      `Sum of ${fmtNum(usage.cost_sessions)} sessions that did record it`),
+      `Sum of ${fmtNum(usage.cost_sessions)} sessions that did record it, as Claude Code computed it`),
   ].join("");
 
   const modelRows = Object.entries(usage.by_model)
@@ -1661,20 +1676,20 @@ async function loadUsage() {
     .map(([model, m]) => {
       const share = t.total ? (m.total / t.total) * 100 : 0;
       return `<tr><td>${escapeHtml(model)}<div class="usage-bar"><span style="width:${share.toFixed(1)}%"></span></div></td>
-        <td style="text-align:right; white-space:nowrap;">${fmtTokens(m.total)}</td></tr>`;
+        <td style="text-align:right; white-space:nowrap;">${fmtTokens(m.total)}<div class="note">${money(m.estimated_cost_usd)} est.</div></td></tr>`;
     }).join("");
   const topRows = usage.top_sessions.slice(0, 10).map(s => `
     <tr>
       <td><button class="linkish" data-open-path="${escapeAttr(s.path)}" title="Show this session in the list">${escapeHtml(s.title)}</button>
         <div class="note">${escapeHtml(s.tool)}</div></td>
-      <td style="text-align:right; white-space:nowrap;">${fmtTokens(s.total)}${s.cost_usd != null ? `<div class="note">$${s.cost_usd.toFixed(2).replace(".", ",")}</div>` : ""}</td>
+      <td style="text-align:right; white-space:nowrap;">${fmtTokens(s.total)}<div class="note">${money(s.estimated_cost_usd)} est.${s.cost_usd != null ? ` · ${money(s.cost_usd)} recorded` : ""}</div></td>
     </tr>`).join("");
   document.getElementById("usageDetails").innerHTML = `
     <div class="card"><div class="label">By model</div>
       <table class="usage-table">${modelRows || "<tr><td class='note'>No data</td></tr>"}</table></div>
     <div class="card"><div class="label">Sessions using the most</div>
       <table class="usage-table">${topRows || "<tr><td class='note'>No data</td></tr>"}</table>
-      <div class="usage-note">Cursor is not included: it does not store reliable token counters.</div></div>`;
+      <div class="usage-note">Estimates exclude the Batch discount, fast mode, the US-only surcharge and tool definitions. Cursor is not included: its conversations do not record which model was used.</div></div>`;
 }
 
 async function loadArtifacts() {

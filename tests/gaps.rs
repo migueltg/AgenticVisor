@@ -165,3 +165,22 @@ fn cursor_conversation_is_not_deleted_while_cursor_runs_or_for_foreign_paths() {
     assert!(cursor_chats::delete_chat(&home, &backups_dir, &format!("{}#not-an-id", db.display()), false).is_err());
     assert_eq!(row_count(&db), 5);
 }
+
+#[test]
+fn session_estimate_prices_each_response_with_its_cache_split() {
+    let home = temp_home("pricing");
+    let file = home.join("session.jsonl");
+    // One Opus 5 response: 1M input, 1M output, 1M cache writes of which 1M were 1-hour writes.
+    write(
+        &file,
+        "{\"type\":\"assistant\",\"uuid\":\"u1\",\"message\":{\"id\":\"m1\",\"model\":\"claude-opus-5\",\"usage\":{\"input_tokens\":1000000,\"output_tokens\":1000000,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":1000000,\"cache_creation\":{\"ephemeral_1h_input_tokens\":1000000}}}}\n\
+         {\"type\":\"assistant\",\"uuid\":\"u2\",\"message\":{\"id\":\"m1\",\"model\":\"claude-opus-5\",\"usage\":{\"input_tokens\":1000000,\"output_tokens\":1000000,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":1000000,\"cache_creation\":{\"ephemeral_1h_input_tokens\":1000000}}}}\n\
+         {\"type\":\"assistant\",\"uuid\":\"u3\",\"message\":{\"id\":\"m2\",\"model\":\"<synthetic>\",\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}}\n",
+    );
+    let usage = agenticvisor::usage::parse_session(&file).expect("usage");
+    // The repeated line for m1 is counted once.
+    assert_eq!(usage.responses, 2);
+    // Opus 5: input 5 + output 25 + 1-hour cache write 10, all per million tokens.
+    assert!((usage.estimated_cost_usd - 40.0).abs() < 1e-9, "{}", usage.estimated_cost_usd);
+    assert_eq!(usage.unpriced_responses, 0, "a response without tokens is not counted as unpriced");
+}

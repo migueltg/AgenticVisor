@@ -26,7 +26,10 @@ pub struct Tokens {
     pub input: u64,
     pub output: u64,
     pub cache_read: u64,
+    /// All cache writes, 5-minute and 1-hour together.
     pub cache_write: u64,
+    /// The part of `cache_write` that was written with the 1-hour lifetime.
+    pub cache_write_1h: u64,
 }
 
 impl Tokens {
@@ -39,6 +42,7 @@ impl Tokens {
         self.output += other.output;
         self.cache_read += other.cache_read;
         self.cache_write += other.cache_write;
+        self.cache_write_1h += other.cache_write_1h;
     }
 }
 
@@ -50,6 +54,12 @@ pub struct SessionUsage {
     pub responses: u64,
     /// Total cost Claude Code recorded for the session, if it recorded one.
     pub cost_usd: Option<f64>,
+    /// Cost estimated at the list prices in `pricing`, summed response by response.
+    pub estimated_cost_usd: f64,
+    /// The estimate per model.
+    pub estimated_by_model: BTreeMap<String, f64>,
+    /// Responses with tokens whose model has no known price (not in the estimate).
+    pub unpriced_responses: u64,
 }
 
 impl SessionUsage {
@@ -64,11 +74,17 @@ impl SessionUsage {
 
 fn tokens_from(usage: &Value) -> Tokens {
     let field = |name: &str| usage.get(name).and_then(Value::as_u64).unwrap_or(0);
+    let write_1h = usage
+        .get("cache_creation")
+        .and_then(|c| c.get("ephemeral_1h_input_tokens"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
     Tokens {
         input: field("input_tokens"),
         output: field("output_tokens"),
         cache_read: field("cache_read_input_tokens"),
         cache_write: field("cache_creation_input_tokens"),
+        cache_write_1h: write_1h,
     }
 }
 
@@ -126,8 +142,16 @@ pub fn parse_session(path: &Path) -> Option<SessionUsage> {
     }
     let mut usage = SessionUsage { cost_usd, ..Default::default() };
     for (model, tokens) in responses.into_values() {
-        usage.by_model.entry(model).or_default().add(&tokens);
+        usage.by_model.entry(model.clone()).or_default().add(&tokens);
         usage.responses += 1;
+        match crate::pricing::response_cost(&model, &tokens) {
+            Some(cost) => {
+                usage.estimated_cost_usd += cost;
+                *usage.estimated_by_model.entry(model).or_default() += cost;
+            }
+            None if tokens.total() > 0 => usage.unpriced_responses += 1,
+            None => {}
+        }
     }
     Some(usage)
 }
@@ -232,6 +256,9 @@ pub fn summary(records: &[SessionRecord]) -> serde_json::Value {
     let mut by_model: BTreeMap<String, Tokens> = BTreeMap::new();
     let mut by_tool: BTreeMap<String, Tokens> = BTreeMap::new();
     let mut totals = Tokens::default();
+    let mut estimated_by_model: BTreeMap<String, f64> = BTreeMap::new();
+    let mut estimated_total = 0.0f64;
+    let mut unpriced = 0u64;
     let mut cost = 0.0f64;
     let mut cost_sessions = 0u64;
     for r in records {
@@ -240,6 +267,11 @@ pub fn summary(records: &[SessionRecord]) -> serde_json::Value {
             by_tool.entry(r.tool.clone()).or_default().add(tokens);
             totals.add(tokens);
         }
+        for (model, usd) in &r.usage.estimated_by_model {
+            *estimated_by_model.entry(model.clone()).or_default() += usd;
+        }
+        estimated_total += r.usage.estimated_cost_usd;
+        unpriced += r.usage.unpriced_responses;
         if let Some(c) = r.usage.cost_usd {
             cost += c;
             cost_sessions += 1;
@@ -254,6 +286,7 @@ pub fn summary(records: &[SessionRecord]) -> serde_json::Value {
             serde_json::json!({
                 "tool": r.tool, "id": r.id, "path": r.path, "title": r.title,
                 "total": r.usage.totals().total(), "cost_usd": r.usage.cost_usd,
+                "estimated_cost_usd": r.usage.estimated_cost_usd,
             })
         })
         .collect();
@@ -262,7 +295,17 @@ pub fn summary(records: &[SessionRecord]) -> serde_json::Value {
         "totals": with_total(totals),
         "cost_usd": if cost_sessions > 0 { Some(cost) } else { None },
         "cost_sessions": cost_sessions,
-        "by_model": by_model.iter().map(|(k, v)| (k.clone(), with_total(*v))).collect::<BTreeMap<_, _>>(),
+        "estimated_cost_usd": estimated_total,
+        "unpriced_responses": unpriced,
+        "pricing": {"source": crate::pricing::PRICES_SOURCE, "checked": crate::pricing::PRICES_CHECKED},
+        "by_model": by_model
+            .iter()
+            .map(|(k, v)| {
+                let mut value = with_total(*v);
+                value["estimated_cost_usd"] = serde_json::json!(estimated_by_model.get(k).copied().unwrap_or(0.0));
+                (k.clone(), value)
+            })
+            .collect::<BTreeMap<_, _>>(),
         "by_tool": by_tool.iter().map(|(k, v)| (k.clone(), with_total(*v))).collect::<BTreeMap<_, _>>(),
         "top_sessions": top,
     })
@@ -271,6 +314,6 @@ pub fn summary(records: &[SessionRecord]) -> serde_json::Value {
 fn with_total(t: Tokens) -> serde_json::Value {
     serde_json::json!({
         "input": t.input, "output": t.output, "cache_read": t.cache_read,
-        "cache_write": t.cache_write, "total": t.total(),
+        "cache_write": t.cache_write, "cache_write_1h": t.cache_write_1h, "total": t.total(),
     })
 }
