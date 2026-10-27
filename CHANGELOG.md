@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] - 2026-10-27
+
 ### Added
 
 - Adapters for the Codex CLI (`~/.codex`) and the Hermes agent (`~/.hermes`).

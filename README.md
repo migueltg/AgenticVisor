@@ -11,7 +11,7 @@ it can detect.
 AgenticVisor is a single native binary with the interface built in. It runs
 entirely on your machine and never sends your data anywhere.
 
-> **Status: beta (0.1.0-beta.1).** Tested on macOS (Apple Silicon). The Linux and
+> **Status: beta (0.1.0-beta.2).** Tested on macOS (Apple Silicon). The Linux and
 > Windows builds are produced automatically, but their tool locations have not
 > been verified yet. See [Platform support](#platform-support).
 
