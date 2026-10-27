@@ -76,7 +76,7 @@ fn chat_db_note(db_file: &Path) -> String {
         return "Copy/journal of the Cursor Desktop chat database — not a cache, informational only".to_string();
     }
     let chats = match count_conversations(db_file) {
-        Some(n) => format!("{n} conversaciones"),
+        Some(n) => format!("{n} conversations"),
         None => "conversations not readable right now".to_string(),
     };
     format!(
@@ -135,6 +135,7 @@ fn scan_user_dir(user_dir: &Path, out: &mut Vec<Entry>) {
                     out.push(
                         Entry::new(&ws.to_string_lossy(), "cursor-desktop", category, &ws.to_string_lossy())
                             .with_stats(size, count, mtime)
+                            .project(project_path.clone())
                             .title(project_path)
                             .note(note),
                     );

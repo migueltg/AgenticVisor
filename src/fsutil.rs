@@ -50,6 +50,16 @@ pub fn mtime_secs(meta: &fs::Metadata) -> f64 {
         .unwrap_or(0.0)
 }
 
+/// Seconds since the epoch when `path` was created; 0.0 where the platform does not record it.
+pub fn created_secs(path: &Path) -> f64 {
+    fs::metadata(path)
+        .ok()
+        .and_then(|m| m.created().ok())
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0)
+}
+
 /// Walks `path` once: (total size, number of files, most recent mtime).
 /// Does not follow symlinks (avoids loops and double counting). `skip_children` excludes
 /// direct subfolders by name, when they are listed as their own entries.

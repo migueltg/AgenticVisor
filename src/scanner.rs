@@ -7,19 +7,32 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 
-use crate::adapters::{claude_code, claude_desktop, cursor_cli, cursor_desktop, generic};
+use crate::adapters::{claude_code, claude_desktop, codex, cursor_cli, cursor_desktop, generic, hermes};
 use crate::entry::Entry;
+use crate::fsutil::created_secs;
 
 pub struct Scan {
     pub entries: Vec<Entry>,
 }
 
 pub fn run_scan(home: &Path) -> Scan {
+    // Each adapter reads its own folders, so they run in parallel. The results are
+    // joined in this fixed order, which keeps the output deterministic.
+    let adapters: [fn(&Path) -> Vec<Entry>; 6] = [
+        claude_code::scan,
+        claude_desktop::scan,
+        cursor_cli::scan,
+        cursor_desktop::scan,
+        codex::scan,
+        hermes::scan,
+    ];
     let mut entries = Vec::new();
-    entries.extend(claude_code::scan(home));
-    entries.extend(claude_desktop::scan(home));
-    entries.extend(cursor_cli::scan(home));
-    entries.extend(cursor_desktop::scan(home));
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = adapters.iter().map(|&adapter| scope.spawn(move || adapter(home))).collect();
+        for handle in handles {
+            entries.extend(handle.join().unwrap_or_default());
+        }
+    });
 
     let app_support = home.join("Library").join("Application Support");
     let claimed: HashSet<String> = [
@@ -29,11 +42,20 @@ pub fn run_scan(home: &Path) -> Scan {
         app_support.join("Claude"),
         home.join(".cursor"),
         app_support.join("Cursor"),
+        home.join(".codex"),
+        home.join(".hermes"),
     ]
     .iter()
     .map(|p| p.to_string_lossy().into_owned())
     .collect();
     entries.extend(generic::scan(home, &claimed));
+
+    // Creation time comes from the file system, so it is read here once for every entry.
+    for entry in &mut entries {
+        if entry.created == 0.0 {
+            entry.created = created_secs(Path::new(&entry.path));
+        }
+    }
 
     // Sort by size, largest first. Rust's sort is stable.
     entries.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));

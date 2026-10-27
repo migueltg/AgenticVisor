@@ -163,7 +163,9 @@
   .switch input:checked + span::after { transform: translateX(15px); }
   .switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  /* Dialogs */
+  .backup-row { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
+
+/* Dialogs */
   dialog { border-radius: 14px; border: 1px solid var(--border); padding: 0;
     background: var(--panel); color: var(--text); max-width: 480px; }
   dialog::backdrop { background: rgba(0,0,0,.4); }
@@ -347,8 +349,9 @@
     </div>
     <div class="toolbar">
       <select id="toolFilter"><option value="">All tools</option></select>
+      <select id="projectFilter"><option value="">All projects</option></select>
       <select id="staleFilter">
-        <option value="0">Cualquier antigüedad</option>
+        <option value="0">Any age</option>
         <option value="30">Untouched for 30+ days</option>
         <option value="90">Untouched for 90+ days</option>
         <option value="180">Untouched for 180+ days</option>
@@ -356,7 +359,7 @@
       </select>
       <input type="text" id="searchInput" placeholder="Filter by path, title or note…">
       <label style="display:flex; align-items:center; gap:6px; color:var(--muted);">
-        <input type="checkbox" id="cleanupOnly"> solo candidatos a limpieza
+        <input type="checkbox" id="cleanupOnly"> cleanup candidates only
       </label>
     </div>
     <div class="table-wrap">
@@ -364,11 +367,12 @@
         <thead>
           <tr>
             <th style="width:56px"><input type="checkbox" id="selectAll"></th>
-            <th data-sort="tool">Herramienta</th>
+            <th data-sort="tool">Tool</th>
             <th data-sort="category">Category</th>
             <th data-sort="path">Session / path</th>
             <th data-sort="size_bytes">Size</th>
             <th data-sort="item_count">Files</th>
+            <th data-sort="created">Created</th>
             <th data-sort="last_modified">Last modified</th>
             <th></th>
           </tr>
@@ -500,7 +504,7 @@
   <div class="dialog-actions">
     <button id="cancelEmptyTrash">Cancel</button>
     <button class="primary" id="confirmEmptyTrash" style="background:var(--config); border-color:var(--config);">
-      Borrar definitivamente
+      Delete permanently
     </button>
   </div>
 </dialog>
@@ -557,11 +561,12 @@
     <div class="pv-body" id="pvBody"></div>
   </div>
   <div class="pv-pager">
-    <button id="pvPrev">← Anteriores</button>
+    <button id="pvPrev">← Previous</button>
     <span class="note" id="pvPage"></span>
-    <button id="pvNext">Siguientes →</button>
+    <button id="pvNext">Next →</button>
   </div>
   <div class="dialog-actions">
+    <button class="danger-btn" id="pvDelete" hidden>Delete conversation</button>
     <button id="pvClose">Close</button>
   </div>
 </dialog>
@@ -730,6 +735,7 @@ async function loadScan() {
     `${data.entries.length} entradas · ${data.generated_at}`;
   renderSummary(data.summary, data.entries, trashInfo);
   populateToolFilter(data.entries);
+  populateProjectFilter(data.entries);
   updateNavCounts(data.entries);
   render();
 }
@@ -802,7 +808,11 @@ function renderSummary(summary, entries, trashInfo) {
       <div class="stat-line" style="margin-top:0;">Empty -- nothing pending permanent deletion</div>
     </div>`;
 
-  el.innerHTML = totalCard + catCard + toolCard + trashCard;
+  el.innerHTML = totalCard + catCard + toolCard + trashCard + `
+    <div class="card" id="runtimeCard" style="grid-column: span 2;"></div>
+    <div class="card" id="backupsCard" style="grid-column: span 2;"></div>`;
+  loadRuntime();
+  loadBackups();
 
   el.querySelectorAll("[data-set-category]").forEach(btn => {
     btn.onclick = () => goTable(`all:${btn.dataset.setCategory}`);
@@ -877,6 +887,7 @@ function currentFilters() {
   return {
     spec,
     tool: document.getElementById("toolFilter").value,
+    project: document.getElementById("projectFilter").value,
     search: document.getElementById("searchInput").value.toLowerCase(),
     cleanupOnly: document.getElementById("cleanupOnly").checked,
     staleDays: parseInt(document.getElementById("staleFilter").value, 10) || 0,
@@ -888,6 +899,7 @@ function filteredSorted() {
   let rows = state.entries.filter(e =>
     matchesFilter(e, f.spec) &&
     (!f.tool || e.tool === f.tool) &&
+    (!f.project || e.project === f.project) &&
     (!f.search || e.path.toLowerCase().includes(f.search) ||
       (e.title && e.title.toLowerCase().includes(f.search)) ||
       (e.note && e.note.toLowerCase().includes(f.search))) &&
@@ -918,10 +930,10 @@ function toChildEntry(c) {
 // a cleanup candidate without doing the subtraction in your head.
 function ageLabel(ageDays) {
   if (ageDays === null || ageDays === undefined) return "—";
-  if (ageDays <= 0) return "hoy";
-  if (ageDays === 1) return "ayer";
+  if (ageDays <= 0) return "today";
+  if (ageDays === 1) return "yesterday";
   if (ageDays < 30) return `${ageDays} days ago`;
-  if (ageDays < 365) return `hace ${Math.round(ageDays / 30)} meses`;
+  if (ageDays < 365) return `${Math.round(ageDays / 30)} months ago`;
   return `${(ageDays / 365).toFixed(1)} years ago`;
 }
 
@@ -1002,12 +1014,13 @@ function renderRow(e, depth) {
       </td>
       <td>${e.size_human}</td>
       <td>${e.item_count}</td>
+      <td>${e.created_iso || "—"}</td>
       <td title="${escapeAttr(e.last_modified_iso)}">${ageLabel(e.age_days)}</td>
       <td><div style="display:flex; gap:6px; flex-wrap:wrap;">
         ${canPreview(e) ? `<button class="small-btn" data-preview="${escapeAttr(e.path)}">View</button>` : ""}
         ${e.actionable
           ? `<button data-single-trash="${escapeAttr(e.id)}">Trash</button>`
-          : `<span class="note">solo informativo</span>`}
+          : `<span class="note">informational only</span>`}
       </div></td>
     </tr>`;
 }
@@ -1033,6 +1046,74 @@ function updateSelectionBar() {
     document.getElementById("selectionSummary").textContent =
       `${n} elemento(s) seleccionados · ${humanSize(totalBytes)}`;
   }
+}
+
+function populateProjectFilter(entries) {
+  const projects = [...new Set(entries.map(e => e.project).filter(Boolean))].sort();
+  const sel = document.getElementById("projectFilter");
+  const previous = sel.value;
+  sel.innerHTML = '<option value="">All projects</option>' +
+    projects.map(p => `<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join("");
+  sel.value = previous;
+}
+
+// ---- Running agents ----
+async function loadRuntime() {
+  const box = document.getElementById("runtimeCard");
+  if (!box) return;
+  const data = await (await fetch("/api/runtime")).json();
+  const chips = Object.entries(data.tools).map(([tool, s]) =>
+    `<span class="chip">${escapeHtml(tool)}: ${s.running ? `running (${s.processes})` : "not running"}</span>`).join(" ");
+  box.innerHTML = `<div class="label">Running now</div><div>${chips}</div>`;
+}
+
+// ---- Backups ----
+function dayOf(secs) {
+  return secs ? new Date(secs * 1000).toISOString().slice(0, 10) : "—";
+}
+
+async function loadBackups() {
+  const box = document.getElementById("backupsCard");
+  if (!box) return;
+  const data = await (await fetch("/api/backups")).json();
+  const rows = data.items.map(b => `
+    <label class="backup-row">
+      <input type="checkbox" class="backupCheck" data-name="${escapeAttr(b.name)}">
+      <span class="title">${escapeHtml(b.label || b.name)}</span>
+      <span class="note">${dayOf(b.created)} · ${b.size_human}</span>
+    </label>`).join("");
+  box.innerHTML = `
+    <div class="label">Backups (${data.count} · ${data.total_size_human})</div>
+    ${rows || '<div class="note">No backups yet.</div>'}
+    <div class="dialog-actions" style="justify-content:flex-start">
+      <button id="backupsTrashSelected">Move selected to trash</button>
+      <button class="danger-btn" id="backupsTrashAll">Move all to trash</button>
+    </div>`;
+  box.querySelector("#backupsTrashSelected").onclick = () => {
+    const names = [...box.querySelectorAll(".backupCheck:checked")].map(c => c.dataset.name);
+    if (names.length) confirmBackupTrash(names);
+  };
+  box.querySelector("#backupsTrashAll").onclick = () => {
+    const names = data.items.map(b => b.name);
+    if (names.length) confirmBackupTrash(names);
+  };
+}
+
+function confirmBackupTrash(names) {
+  openAction({
+    text: `Move ${names.length} backup${names.length === 1 ? "" : "s"} to the dashboard trash?`,
+    note: "They are moved to the trash, not deleted. You can recover them by hand until you empty the trash.",
+    onConfirm: async () => {
+      const res = await (await fetch("/api/backups_delete", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ names }),
+      })).json();
+      const failed = Object.values(res.results || {}).filter(r => !r.ok);
+      flash(failed.length
+        ? "Some backups could not be moved: " + failed.map(r => r.error).join("; ")
+        : `Moved ${names.length} backup(s) to the trash.`);
+      loadScan();
+    },
+  });
 }
 
 function humanSize(n) {
@@ -1110,6 +1191,7 @@ document.getElementById("trashSelectedBtn").onclick = () => {
 };
 
 document.getElementById("toolFilter").onchange = render;
+document.getElementById("projectFilter").onchange = render;
 document.getElementById("searchInput").oninput = render;
 document.getElementById("cleanupOnly").onchange = render;
 document.getElementById("staleFilter").onchange = render;
@@ -1228,15 +1310,23 @@ document.getElementById("reindexBtn").onclick = async () => {
   watchIndex();
 };
 
+// Shows one entry in the table, filtered to its path.
+function openInList(path) {
+  document.getElementById("searchInput").value = path;
+  goTable("all:");
+}
+
 document.getElementById("contentResults").addEventListener("click", (e) => {
   if (e.target.dataset.preview) {
     openPreview(e.target.dataset.preview);
     return;
   }
-  const path = e.target.dataset.openPath;
-  if (!path) return;
-  document.getElementById("searchInput").value = path;
-  goTable("all:");
+  if (e.target.dataset.openPath) openInList(e.target.dataset.openPath);
+});
+
+// The token sessions table in the overview links to the list too.
+document.getElementById("usageDetails").addEventListener("click", (e) => {
+  if (e.target.dataset.openPath) openInList(e.target.dataset.openPath);
 });
 
 // ---- Skills and plugins ----
@@ -1541,10 +1631,14 @@ function fmtNum(n) {
 }
 
 function fmtTokens(n) {
-  if (n >= 1e9) return (n / 1e9).toFixed(2).replace(".", ",") + " mil M";
-  if (n >= 1e6) return (n / 1e6).toFixed(1).replace(".", ",") + " M";
-  if (n >= 1e3) return (n / 1e3).toFixed(1).replace(".", ",") + " k";
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + " B";
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + " M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + " k";
   return String(n);
+}
+
+function money(usd) {
+  return "$" + Number(usd || 0).toFixed(2);
 }
 
 function usageCard(label, value, note) {
@@ -1568,10 +1662,13 @@ async function loadUsage() {
     usageCard("Total tokens", fmtTokens(t.total), `${fmtNum(usage.sessions)} sessions with recorded usage`),
     usageCard("Output (what the model wrote)", fmtTokens(t.output), `Input: ${fmtTokens(t.input)} tokens`),
     usageCard("Cache", fmtTokens(t.cache_read + t.cache_write), `${cacheShare}% of the total: reused context, costs much less than input`),
-    usageCard("Coste registrado", usage.cost_usd == null ? "—" :
-      "$" + usage.cost_usd.toFixed(2).replace(".", ","),
+    usageCard("Estimated cost", money(usage.estimated_cost_usd),
+      `At Anthropic list prices checked ${usage.pricing.checked}. ` +
+      (usage.unpriced_responses ? `${fmtNum(usage.unpriced_responses)} responses with no known price left out. ` : "") +
+      `<a class="open-link" href="${escapeAttr(usage.pricing.source)}" target="_blank" rel="noopener">Price list</a>`),
+    usageCard("Recorded cost", usage.cost_usd == null ? "—" : money(usage.cost_usd),
       usage.cost_usd == null ? "Claude Code recorded no cost for these sessions" :
-      `Sum of ${fmtNum(usage.cost_sessions)} sessions that did record it`),
+      `Sum of ${fmtNum(usage.cost_sessions)} sessions that did record it, as Claude Code computed it`),
   ].join("");
 
   const modelRows = Object.entries(usage.by_model)
@@ -1579,20 +1676,20 @@ async function loadUsage() {
     .map(([model, m]) => {
       const share = t.total ? (m.total / t.total) * 100 : 0;
       return `<tr><td>${escapeHtml(model)}<div class="usage-bar"><span style="width:${share.toFixed(1)}%"></span></div></td>
-        <td style="text-align:right; white-space:nowrap;">${fmtTokens(m.total)}</td></tr>`;
+        <td style="text-align:right; white-space:nowrap;">${fmtTokens(m.total)}<div class="note">${money(m.estimated_cost_usd)} est.</div></td></tr>`;
     }).join("");
   const topRows = usage.top_sessions.slice(0, 10).map(s => `
     <tr>
       <td><button class="linkish" data-open-path="${escapeAttr(s.path)}" title="Show this session in the list">${escapeHtml(s.title)}</button>
         <div class="note">${escapeHtml(s.tool)}</div></td>
-      <td style="text-align:right; white-space:nowrap;">${fmtTokens(s.total)}${s.cost_usd != null ? `<div class="note">$${s.cost_usd.toFixed(2).replace(".", ",")}</div>` : ""}</td>
+      <td style="text-align:right; white-space:nowrap;">${fmtTokens(s.total)}<div class="note">${money(s.estimated_cost_usd)} est.${s.cost_usd != null ? ` · ${money(s.cost_usd)} recorded` : ""}</div></td>
     </tr>`).join("");
   document.getElementById("usageDetails").innerHTML = `
     <div class="card"><div class="label">By model</div>
       <table class="usage-table">${modelRows || "<tr><td class='note'>No data</td></tr>"}</table></div>
     <div class="card"><div class="label">Sessions using the most</div>
       <table class="usage-table">${topRows || "<tr><td class='note'>No data</td></tr>"}</table>
-      <div class="usage-note">Cursor is not included: it does not store reliable token counters.</div></div>`;
+      <div class="usage-note">Estimates exclude the Batch discount, fast mode, the US-only surcharge and tool definitions. Cursor is not included: its conversations do not record which model was used.</div></div>`;
 }
 
 async function loadArtifacts() {
@@ -1675,6 +1772,7 @@ async function openPreview(key, offset = 0) {
   pv.offset = res.offset;
   pv.limit = res.limit;
   pv.hasMore = res.has_more;
+  document.getElementById("pvDelete").hidden = !isCursorChatKey(key);
   document.getElementById("pvTitle").textContent = res.label;
   document.getElementById("pvMeta").textContent = shortPath(key.split("#")[0]);
   document.getElementById("pvBody").innerHTML =
@@ -1682,7 +1780,7 @@ async function openPreview(key, offset = 0) {
   document.getElementById("pvBody").scrollTop = 0;
   const from = res.offset + 1;
   const to = res.offset + res.messages.length;
-  document.getElementById("pvPage").textContent = res.messages.length ? `Mensajes ${from}–${to}` : "Fin";
+  document.getElementById("pvPage").textContent = res.messages.length ? `Messages ${from}–${to}` : "End";
   document.getElementById("pvPrev").disabled = res.offset === 0;
   document.getElementById("pvNext").disabled = !res.has_more;
   const dialog = document.getElementById("previewDialog");
@@ -1692,6 +1790,29 @@ async function openPreview(key, offset = 0) {
 document.getElementById("pvPrev").onclick = () => openPreview(pv.key, Math.max(0, pv.offset - pv.limit));
 document.getElementById("pvNext").onclick = () => openPreview(pv.key, pv.offset + pv.limit);
 document.getElementById("pvClose").onclick = () => document.getElementById("previewDialog").close();
+
+// Conversations of Cursor Desktop live in one database; their keys are "<database>#<conversation id>".
+function isCursorChatKey(key) {
+  return key.includes("Cursor/User/globalStorage/state.vscdb#");
+}
+
+function confirmCursorChatDelete() {
+  openAction({
+    text: "Delete this conversation from the Cursor chat database?",
+    warn: true,
+    note: "A full copy of the database is saved first. Close Cursor before deleting: the change is refused while it runs. The search index is rebuilt afterwards.",
+    onConfirm: async () => {
+      const res = await (await fetch("/api/cursor_chat_delete", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: pv.key }),
+      })).json();
+      if (!res.ok) { flash(res.error); return; }
+      document.getElementById("previewDialog").close();
+      flash(`Conversation deleted (${res.deleted_rows} rows). Backup: ${res.backup}`);
+      loadScan();
+    },
+  });
+}
+document.getElementById("pvDelete").onclick = confirmCursorChatDelete;
 
 // ---- Configuration ----
 const cfgData = { items: [], editing: null };

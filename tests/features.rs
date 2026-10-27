@@ -342,9 +342,9 @@ fn preview_reads_a_cursor_chat_database() {
 #[test]
 fn preview_reads_plans_and_rejects_outside_roots_and_projects() {
     let fh = FakeHome::new("prevplan");
-    let plan = fh.write(".claude/plans/plan.md", "# Plan\nPaso uno\n");
+    let plan = fh.write(".claude/plans/plan.md", "# Plan\nStep one\n");
     let out = preview(&fh.home, &plan.to_string_lossy(), "0", 40).unwrap();
-    assert!(out["messages"][0]["text"].as_str().unwrap().contains("Paso uno"));
+    assert!(out["messages"][0]["text"].as_str().unwrap().contains("Step one"));
 
     fh.write("secret.txt", "x");
     let outside = temp_dir_for_outside();

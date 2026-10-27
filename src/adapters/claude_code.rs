@@ -118,6 +118,7 @@ fn scan_projects(root: &Path, home: &Path, out: &mut Vec<Entry>) {
             let mut entry = Entry::new(&jsonl.to_string_lossy(), "claude-code", "sessions", &jsonl.to_string_lossy())
                 .with_stats(size, count, mtime)
                 .title(title)
+                .project(project.clone())
                 .note(format!("Project: {label}"));
             entry.usage = session_usage(&jsonl);
             out.push(entry);
@@ -365,7 +366,7 @@ fn scan_mcp_servers(home: &Path, out: &mut Vec<Entry>) {
             .sensitive(true)
             .informational()
             .title(name.clone())
-            .note(format!("Servidor MCP ({transport}) — solo informativo")),
+            .note(format!("MCP server ({transport}) — informational only")),
         );
     }
 }
