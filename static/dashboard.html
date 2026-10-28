@@ -1742,7 +1742,7 @@ const pv = { key: "", offset: 0, limit: 40, hasMore: false };
 // Cursor Desktop chats live inside state.vscdb: they are opened from search.
 // Work plans: Markdown files in ~/.claude/plans or ~/.cursor/plans.
 function isPlan(entry) {
-  return /\/\.(claude|cursor)\/plans\//.test(entry.path);
+  return /[\\/]\.(claude|cursor)[\\/]plans[\\/]/.test(entry.path);
 }
 
 function canPreview(entry) {

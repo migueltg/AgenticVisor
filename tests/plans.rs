@@ -59,6 +59,8 @@ fn plans_folder_is_not_listed_as_one_entry() {
     let scan = scanner::run_scan(&home);
     let plans_folder = home.join(".cursor/plans").to_string_lossy().into_owned();
     assert!(scan.entries.iter().all(|e| e.path != plans_folder), "the folder should not be one entry");
-    let plan_count = scan.entries.iter().filter(|e| e.path.contains("/plans/")).count();
+    // Compare path components, so the check also holds where paths use backslashes.
+    let in_plans = |path: &str| Path::new(path).components().any(|c| c.as_os_str() == "plans");
+    let plan_count = scan.entries.iter().filter(|e| in_plans(&e.path)).count();
     assert_eq!(plan_count, 2);
 }
