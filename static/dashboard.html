@@ -361,6 +361,9 @@
       <label style="display:flex; align-items:center; gap:6px; color:var(--muted);">
         <input type="checkbox" id="cleanupOnly"> cleanup candidates only
       </label>
+      <label style="display:flex; align-items:center; gap:6px; color:var(--muted);">
+        <input type="checkbox" id="plansOnly"> plans only
+      </label>
     </div>
     <div class="table-wrap">
       <table id="table">
@@ -890,6 +893,7 @@ function currentFilters() {
     project: document.getElementById("projectFilter").value,
     search: document.getElementById("searchInput").value.toLowerCase(),
     cleanupOnly: document.getElementById("cleanupOnly").checked,
+    plansOnly: document.getElementById("plansOnly").checked,
     staleDays: parseInt(document.getElementById("staleFilter").value, 10) || 0,
   };
 }
@@ -904,6 +908,7 @@ function filteredSorted() {
       (e.title && e.title.toLowerCase().includes(f.search)) ||
       (e.note && e.note.toLowerCase().includes(f.search))) &&
     (!f.cleanupOnly || CLEANUP_CATEGORIES.has(e.category)) &&
+    (!f.plansOnly || isPlan(e)) &&
     (!f.staleDays || (e.age_days != null && e.age_days >= f.staleDays))
   );
   rows.sort((a, b) => {
@@ -1194,6 +1199,7 @@ document.getElementById("toolFilter").onchange = render;
 document.getElementById("projectFilter").onchange = render;
 document.getElementById("searchInput").oninput = render;
 document.getElementById("cleanupOnly").onchange = render;
+document.getElementById("plansOnly").onchange = render;
 document.getElementById("staleFilter").onchange = render;
 
 document.querySelectorAll("th[data-sort]").forEach(th => {
@@ -1734,9 +1740,15 @@ const pv = { key: "", offset: 0, limit: 40, hasMore: false };
 // Only the rows that are a conversation: Claude and Cursor transcripts,
 // Cursor CLI chats. Folders such as AgentStores or Jobs have no "View" button.
 // Cursor Desktop chats live inside state.vscdb: they are opened from search.
+// Work plans: Markdown files in ~/.claude/plans or ~/.cursor/plans.
+function isPlan(entry) {
+  return /\/\.(claude|cursor)\/plans\//.test(entry.path);
+}
+
 function canPreview(entry) {
   if (!FEATURES.preview) return false;
   if (entry.category !== "sessions") return false;
+  if (isPlan(entry)) return true;
   const p = entry.path;
   if (entry.tool === "claude-code") return p.endsWith(".jsonl");
   if (entry.tool === "claude-desktop") return p.endsWith(".jsonl") || /\/local_[^/]+$/.test(p);
