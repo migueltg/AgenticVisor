@@ -1,0 +1,15 @@
+[package]
+name = "agenticvisor-app"
+version = "0.1.0"
+edition = "2021"
+description = "Desktop app for AgenticVisor: see and clean up what AI coding tools store locally"
+license = "MIT"
+publish = false
+
+[dependencies]
+agenticvisor = { path = ".." }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }

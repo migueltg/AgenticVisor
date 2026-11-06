@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-beta.4] - 2026-11-06
+
+### Changed
+
+- The dashboard is a desktop app built with Tauri. The first target is macOS,
+  built from source; the app is not signed yet.
+- The local web server is gone: no network port is opened. `--port` and
+  `--no-browser` are removed. `scan-json` and `usage-json` remain.
+
+
 ## [0.1.0-beta.3] - 2026-11-06
 
 ### Added

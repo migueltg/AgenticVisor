@@ -28,3 +28,47 @@ jobs:
 
       - name: Test
         run: cargo test --locked
+
+  app:
+    # Builds the desktop app with the same bundle format the release uses,
+    # so packaging problems show up on pull requests.
+    name: App (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-arm64
+            os: macos-15
+            bundles: app
+          - name: linux-x64
+            os: ubuntu-latest
+            bundles: deb
+          - name: windows-x64
+            os: windows-latest
+            bundles: nsis
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Linux dependencies for Tauri
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install the Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Build the app
+        run: cargo tauri build --bundles ${{ matrix.bundles }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: app-${{ matrix.name }}
+          path: target/release/bundle/
+          if-no-files-found: error
+          retention-days: 7

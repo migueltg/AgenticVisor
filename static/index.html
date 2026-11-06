@@ -587,6 +587,25 @@
 
 <script src="/vendor/cm-json.js"></script>
 <script>
+// The interface calls its API with fetch("/api/..."). In the desktop app that
+// request goes to the "api" command instead, and the answer is returned as a
+// Response, so the calls below stay the same. There is no network server.
+(function () {
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = async function (url, options = {}) {
+    if (typeof url !== "string" || !url.startsWith("/api/")) return nativeFetch(url, options);
+    const body = options.body ? JSON.parse(options.body) : null;
+    const answer = await window.__TAURI__.core.invoke("api", {
+      method: options.method || "GET",
+      target: url,
+      body,
+    });
+    return new Response(JSON.stringify(answer.body), {
+      status: answer.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+})();
 const CATEGORY_LABELS = {
   sessions: "Sessions", cache: "Cache", config: "Sensitive config",
   orphaned: "Orphans", plugins: "Plugins (data)", skills: "Skills", other: "Other",
