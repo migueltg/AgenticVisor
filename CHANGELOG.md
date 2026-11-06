@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-beta.3] - 2026-11-06
+
+### Added
+
+- Each Claude Code and Cursor work plan is its own entry, with its title,
+  overview and task progress. A "plans only" filter and previews of plans.
+
 ## [0.1.0-beta.2] - 2026-10-27
 
 ### Added
