@@ -90,6 +90,7 @@ jobs:
           name: ${{ matrix.name }}
           path: dist/*
           if-no-files-found: error
+          overwrite: true
 
   release:
     name: Publish release
@@ -108,6 +109,8 @@ jobs:
       - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
+          # The job does not check out the repository, so gh needs to be told which one.
+          GH_REPO: ${{ github.repository }}
         run: |
           tag="${{ github.ref_name }}"
           # If a release for this tag already exists (re-run, or a release
