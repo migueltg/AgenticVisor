@@ -31,21 +31,27 @@ yet, so macOS and Windows may warn the first time you run them.
 
 ## Quick start
 
-From a release, unpack the file and run the `agenticvisor` binary in it.
+The desktop app is a native window with the interface built in. Nothing listens
+on a network port.
 
-Or build from source (Rust toolchain required, see <https://rustup.rs>):
+On macOS, build the app from source for now (Rust toolchain and the Tauri CLI
+required, see <https://rustup.rs> and <https://tauri.app>):
+
+```bash
+cargo install tauri-cli --version "^2" --locked
+cargo tauri build --bundles app
+open target/release/bundle/macos/AgenticVisor.app
+```
+
+The command line tool prints the same data for scripts:
 
 ```bash
 cargo build --release
-./target/release/agenticvisor
+./target/release/agenticvisor scan-json
+./target/release/agenticvisor usage-json
 ```
 
-The dashboard opens at <http://127.0.0.1:8756> (the browser opens by itself).
-The server listens only on `127.0.0.1`, so other devices on your network cannot
-reach it.
-
-Options: `--port N`, `--no-browser`, `--version`. Commands: `scan-json` and
-`usage-json` print the scan and the token usage as JSON, which is useful for scripts.
+Builds are not signed yet, so macOS asks you to confirm before the first launch.
 
 ## What it does
 
@@ -108,8 +114,8 @@ a project filter narrows entries to the working directory they were recorded in.
   `password` or `authorization`, and values that look like API keys, are shown as
   `••••`. A file that contains credentials becomes read-only automatically.
 - **Only known locations.** The API accepts identifiers and session keys from a
-  fixed catalogue, never arbitrary paths. The local server listens only on
-  `127.0.0.1`.
+  fixed catalogue, never arbitrary paths. The app opens no network ports: the
+  interface talks to the program through the app's own commands.
 - **Your data stays local.** The search index, backups, change log and trash live
   in the data folder on your machine. They are never part of the project or of
   a release.
@@ -126,7 +132,7 @@ Set `AGENTICVISOR_DATA` to use another folder.
 
 ```
 src/main.rs            command line and startup
-src/server.rs          local HTTP server and API
+src/api.rs             the API: one function per route, no network
 src/scanner.rs         runs every adapter and builds the table
 src/adapters/          one module per tool: where its data lives and what it is
 src/search/            search index (SQLite FTS5) and session readers
@@ -139,6 +145,7 @@ src/trash.rs           trash and emptying it
 src/backups.rs         backup inventory, moved to the trash
 src/cursor_chats.rs    deletes one Cursor Desktop conversation
 src/runtime.rs         which agent programs are running
+src-tauri/            the desktop app (Tauri): window, commands, bundle settings
 static/                the interface (one HTML file, no build step) and the editor
 ```
 

@@ -30,7 +30,7 @@ maintainers cannot test.
 
 ## Changing the interface
 
-`static/dashboard.html` is a single file with no build step. Keep it that way.
+`static/index.html` is a single file with no build step. Keep it that way.
 Any new endpoint must:
 - accept identifiers from a fixed catalogue, not arbitrary paths;
 - make a backup before writing;

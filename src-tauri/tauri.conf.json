@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AgenticVisor",
+  "version": "0.1.0",
+  "identifier": "org.agenticvisor.app",
+  "build": {
+    "frontendDist": "../static"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "AgenticVisor",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 420,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "category": "DeveloperTool",
+    "shortDescription": "See, search and clean up what AI coding tools store on your computer",
+    "longDescription": "A local dashboard for the data Claude Code, Claude Desktop, Cursor and other AI tools keep on your computer. Nothing leaves the machine.",
+    "icon": ["icons/icon.icns", "icons/icon.png"]
+  }
+}
