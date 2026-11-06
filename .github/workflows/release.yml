@@ -1,8 +1,8 @@
 name: Release
 
-# Runs when a version tag such as v0.1.0-beta.1 is pushed.
-# Builds the binary for each system, packages it with its checksum,
-# and creates the GitHub release with those files attached.
+# Runs when a version tag such as v0.1.0-beta.4 is pushed. For each system it builds
+# the desktop app and the command line tool, packages them, and creates the GitHub
+# release with the files and their checksums attached.
 on:
   push:
     tags:
@@ -19,57 +19,76 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: windows-x64
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            archive: zip
-          - name: linux-x64
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            archive: tar.gz
           - name: macos-arm64
             os: macos-15
-            target: aarch64-apple-darwin
-            archive: tar.gz
+            bundles: app
+          - name: linux-x64
+            os: ubuntu-latest
+            bundles: deb
+          - name: windows-x64
+            os: windows-latest
+            bundles: nsis
     steps:
       - uses: actions/checkout@v7
 
+      - name: Linux dependencies for Tauri
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
 
       - name: Test
-        run: cargo test --locked --target ${{ matrix.target }}
+        run: cargo test --locked
 
-      - name: Build release binary
-        run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Build the command line tool
+        run: cargo build --release --locked
 
-      - name: Package (Windows)
-        if: matrix.archive == 'zip'
-        shell: pwsh
-        run: |
-          $version = "${{ github.ref_name }}"
-          $name = "agenticvisor-$version-${{ matrix.name }}"
-          New-Item -ItemType Directory -Path $name | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/agenticvisor.exe" $name
-          Copy-Item README.md, LICENSE $name
-          Compress-Archive -Path $name -DestinationPath "$name.zip"
+      - name: Install the Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
 
-      - name: Package (Unix)
-        if: matrix.archive == 'tar.gz'
+      - name: Build the desktop app
+        run: cargo tauri build --bundles ${{ matrix.bundles }}
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
         shell: bash
         run: |
-          version="${{ github.ref_name }}"
-          name="agenticvisor-$version-${{ matrix.name }}"
-          mkdir "$name"
-          cp "target/${{ matrix.target }}/release/agenticvisor" "$name/"
-          cp README.md LICENSE "$name/"
-          tar -czf "$name.tar.gz" "$name"
+          tag="${{ github.ref_name }}"
+          mkdir -p dist
+          tar -czf "dist/AgenticVisor-$tag-macos-arm64.tar.gz" -C target/release/bundle/macos AgenticVisor.app
+          cli="agenticvisor-cli-$tag-macos-arm64"
+          mkdir "$cli" && cp target/release/agenticvisor README.md LICENSE "$cli/"
+          tar -czf "dist/$cli.tar.gz" "$cli"
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          tag="${{ github.ref_name }}"
+          mkdir -p dist
+          cp target/release/bundle/deb/*.deb "dist/AgenticVisor-$tag-linux-x64.deb"
+          cli="agenticvisor-cli-$tag-linux-x64"
+          mkdir "$cli" && cp target/release/agenticvisor README.md LICENSE "$cli/"
+          tar -czf "dist/$cli.tar.gz" "$cli"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item (Get-ChildItem target/release/bundle/nsis/*-setup.exe | Select-Object -First 1).FullName "dist/AgenticVisor-$tag-windows-x64-setup.exe"
+          $cli = "agenticvisor-cli-$tag-windows-x64"
+          New-Item -ItemType Directory -Path $cli | Out-Null
+          Copy-Item target/release/agenticvisor.exe, README.md, LICENSE $cli
+          Compress-Archive -Path $cli -DestinationPath "dist/$cli.zip"
 
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}
-          path: agenticvisor-*.${{ matrix.archive }}
+          path: dist/*
           if-no-files-found: error
 
   release:
@@ -77,8 +96,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-
       - uses: actions/download-artifact@v8
         with:
           path: packages
@@ -86,7 +103,7 @@ jobs:
 
       - name: Checksums
         working-directory: packages
-        run: sha256sum agenticvisor-* > SHA256SUMS.txt
+        run: sha256sum AgenticVisor-* agenticvisor-cli-* > SHA256SUMS.txt
 
       - name: Create or update release
         env:
