@@ -26,7 +26,7 @@ const KNOWN_SUBDIRS: &[(&str, &str, bool, &str)] = &[
     ("daemon", "cache", false, "Local daemon state"),
 ];
 
-const HANDLED_SEPARATELY: &[&str] = &["projects", "sessions", "transcripts", "skills", "plugins"];
+const HANDLED_SEPARATELY: &[&str] = &["projects", "sessions", "transcripts", "skills", "plugins", "plans"];
 
 fn cwd_from_transcripts(project_folder: &Path) -> Option<String> {
     let mut files: Vec<PathBuf> = fs::read_dir(project_folder)
@@ -380,6 +380,7 @@ pub fn scan(home: &Path) -> Vec<Entry> {
         scan_transcripts(&root, &mut out);
         scan_skills(&root, &mut out);
         scan_plugins(&root, &mut out);
+        out.extend(crate::plans::scan_claude(&root));
 
         for child in sorted_children(&root).into_iter().filter(|p| p.is_dir()) {
             let name = child.file_name().unwrap_or_default().to_string_lossy().into_owned();
