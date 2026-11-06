@@ -11,7 +11,7 @@ it can detect.
 AgenticVisor is a single native binary with the interface built in. It runs
 entirely on your machine and never sends your data anywhere.
 
-> **Status: beta (0.1.0-beta.3).** Tested on macOS (Apple Silicon). The Linux and
+> **Status: beta (0.1.0-beta.4).** Tested on macOS (Apple Silicon). The Linux and
 > Windows builds are produced automatically, but their tool locations have not
 > been verified yet. See [Platform support](#platform-support).
 
@@ -20,14 +20,15 @@ entirely on your machine and never sends your data anywhere.
 Go to the [Releases](https://github.com/migueltg/AgenticVisor/releases) page and
 download the file for your system:
 
-| System | File |
-|--------|------|
-| macOS (Apple Silicon) | `agenticvisor-vX.Y.Z-macos-arm64.tar.gz` |
-| Linux (x86-64) | `agenticvisor-vX.Y.Z-linux-x64.tar.gz` |
-| Windows (x86-64) | `agenticvisor-vX.Y.Z-windows-x64.zip` |
+| System | Desktop app | Command line tool |
+|--------|-------------|-------------------|
+| macOS (Apple Silicon) | `AgenticVisor-vX.Y.Z-macos-arm64.tar.gz` (contains `AgenticVisor.app`) | `agenticvisor-cli-vX.Y.Z-macos-arm64.tar.gz` |
+| Linux (x86-64) | `AgenticVisor-vX.Y.Z-linux-x64.deb` | `agenticvisor-cli-vX.Y.Z-linux-x64.tar.gz` |
+| Windows (x86-64) | `AgenticVisor-vX.Y.Z-windows-x64-setup.exe` | `agenticvisor-cli-vX.Y.Z-windows-x64.zip` |
 
 Check the file against `SHA256SUMS.txt` before running it. Builds are not signed
-yet, so macOS and Windows may warn the first time you run them.
+yet, so macOS and Windows may warn the first time you open them. On macOS, open
+the app with the context menu (Open) the first time.
 
 ## Quick start
 

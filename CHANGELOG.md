@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-beta.4] - 2026-11-06
+
 ### Changed
 
 - The dashboard is a desktop app built with Tauri. The first target is macOS,

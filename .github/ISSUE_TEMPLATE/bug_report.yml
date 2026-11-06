@@ -12,7 +12,7 @@ body:
     attributes:
       label: AgenticVisor version
       description: Output of `agenticvisor --version`
-      placeholder: 0.1.0-beta.3
+      placeholder: 0.1.0-beta.4
     validations:
       required: true
   - type: dropdown
