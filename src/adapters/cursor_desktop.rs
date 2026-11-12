@@ -43,7 +43,7 @@ fn file_name(path: &Path) -> String {
 
 /// Project path from a workspaceStorage/<hash>/workspace.json ("folder" or
 /// "workspace", as file://). Returns None if it is not readable.
-fn read_workspace_path(ws_dir: &Path) -> Option<String> {
+pub fn read_workspace_path(ws_dir: &Path) -> Option<String> {
     let text = fs::read_to_string(ws_dir.join("workspace.json")).ok()?;
     let data: serde_json::Value = serde_json::from_str(&text).ok()?;
     let url = data
@@ -199,7 +199,7 @@ fn scan_user_dir(user_dir: &Path, out: &mut Vec<Entry>) {
 }
 
 pub fn scan(home: &Path) -> Vec<Entry> {
-    let mut out = Vec::new();
+    let mut out = crate::cursor_sessions::ide_chat_entries(home);
     let root = home.join("Library").join("Application Support").join("Cursor");
     if !root.is_dir() {
         return out;

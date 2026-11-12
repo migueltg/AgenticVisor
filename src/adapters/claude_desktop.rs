@@ -58,6 +58,11 @@ pub fn scan(home: &Path) -> Vec<Entry> {
 
     for child in children {
         let name = child.file_name().unwrap_or_default().to_string_lossy().into_owned();
+        // Agent mode sessions are listed one by one, not as a single folder.
+        if name == "local-agent-mode-sessions" && child.is_dir() {
+            out.extend(crate::desktop_sessions::agent_mode_entries(&child));
+            continue;
+        }
         let (category, sensitive, note) = match KNOWN_ENTRIES.iter().find(|(n, ..)| *n == name) {
             Some((_, cat, sens, note)) => (cat.to_string(), *sens, note.to_string()),
             None => {

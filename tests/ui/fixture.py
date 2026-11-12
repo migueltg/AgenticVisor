@@ -3,6 +3,7 @@
 Two repositories ("alpha" and "beta") with Claude Code sessions, a session folder,
 session data and history entries, as Claude Code writes them.
 """
+import hashlib
 import json
 import os
 import re
@@ -12,6 +13,7 @@ IDS = {
     "a1": "11111111-1111-4111-8111-111111111111",
     "a2": "22222222-2222-4222-8222-222222222222",
     "b1": "33333333-3333-4333-8333-333333333333",
+    "cursor": "44444444-4444-4444-8444-444444444444",
 }
 
 
@@ -30,6 +32,14 @@ class Fixture:
 
     def folder(self, project):
         return os.path.join(self.home, ".claude", "projects", encode(project))
+
+    def cursor_chat(self, project):
+        """Folder of the Cursor command line chat, under the md5 of its project."""
+        return os.path.join(self.home, ".cursor", "chats", hashlib.md5(project.encode()).hexdigest(), IDS["cursor"])
+
+    def cursor_transcript(self, project):
+        slug = encode(project).lstrip("-")
+        return os.path.join(self.home, ".cursor", "projects", slug, "agent-transcripts", IDS["cursor"])
 
     def transcript(self, project, key):
         return os.path.join(self.folder(project), IDS[key] + ".jsonl")
@@ -57,6 +67,15 @@ class Fixture:
             history.append({"display": prompt, "pastedContents": {}, "timestamp": 1, "project": project, "sessionId": sid})
         with open(os.path.join(self.home, ".claude", "history.jsonl"), "w") as f:
             f.write("".join(json.dumps(h) + "\n" for h in history))
+        # A conversation made with the Cursor command line agent, in alpha.
+        os.makedirs(self.cursor_chat(self.alpha))
+        with open(os.path.join(self.cursor_chat(self.alpha), "meta.json"), "w") as f:
+            json.dump({"cwd": self.alpha, "hasConversation": True}, f)
+        with open(os.path.join(self.cursor_chat(self.alpha), "store.db"), "w") as f:
+            f.write("db")
+        os.makedirs(self.cursor_transcript(self.alpha))
+        with open(os.path.join(self.cursor_transcript(self.alpha), IDS["cursor"] + ".jsonl"), "w") as f:
+            f.write("{}\n")
         os.makedirs(self.data)
         return self
 
