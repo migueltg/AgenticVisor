@@ -510,7 +510,7 @@
     <div class="warning-box" id="confirmWarning" hidden>
       ⚠ At least one of these items was modified today — it may be in use right now.
     </div>
-    <p class="note">They are moved to <code>AgenticVisor/trash/</code>, not deleted. You can recover them by hand as long as you do not empty that folder. A Claude Code session goes with its sub-agent folder, its session data and its history entries.</p>
+    <p class="note">They are moved to <code>AgenticVisor/trash/</code>, not deleted. You can recover them by hand as long as you do not empty that folder. A session goes with everything that belongs to it: for Claude Code its sub-agent folder, session data and history entries; for Cursor its transcript, chat folder and, for an IDE chat, its rows in Cursor's database (backed up first, with Cursor closed).</p>
   </div>
   <div class="dialog-actions">
     <button id="cancelTrash">Cancel</button>
@@ -540,7 +540,7 @@
     <label class="move-field">or a folder path
       <input type="text" id="moveCustom" placeholder="/Users/you/dev/another-repo">
     </label>
-    <p class="note">The session keeps working: Claude Code finds it by its id. A copy of the history is saved first. The folder must exist inside your home folder.</p>
+    <p class="note">The session keeps working: the tool finds it again by its id. For Claude Code a copy of the history is saved first. The folder must exist inside your home folder.</p>
     <p class="note" id="moveError" style="color:var(--config)"></p>
   </div>
   <div class="dialog-actions">
@@ -790,6 +790,7 @@ async function loadScan() {
   state.entries = data.entries;
   projectsData.items = data.projects.items;
   projectsData.unassigned = data.projects.unassigned;
+  projectsData.loaded = true;
   if (state.view === "projects") renderProjects();
   state.selected.clear();
   state.expandedPaths.clear();
@@ -1146,13 +1147,23 @@ function updateSelectionBar() {
 // A Claude Code session: ~/.claude/projects/<folder>/<session id>.jsonl
 const CLAUDE_SESSION = /[\\/]\.claude[\\/]projects[\\/][^\\/]+[\\/][0-9a-f-]{36}\.jsonl$/;
 
+// A Cursor conversation made with the command line agent: a chat folder or a transcript folder.
+const CURSOR_CONVERSATION = /[\\/]\.cursor[\\/](chats[\\/][0-9a-f]{32}|projects[\\/][^\\/]+[\\/]agent-transcripts)[\\/][0-9a-f-]{36}$/;
+
+// Claude Code sessions and Cursor command line conversations can be moved. The server refuses
+// a conversation made in the Cursor IDE, whose lists live in the IDE's own databases.
 function canMove(entry) {
-  return entry.tool === "claude-code" && CLAUDE_SESSION.test(entry.path);
+  return (entry.tool === "claude-code" && CLAUDE_SESSION.test(entry.path)) ||
+    (entry.tool === "cursor-cli" && CURSOR_CONVERSATION.test(entry.path));
 }
 
 // Rendered from the last scan; nothing is scanned again.
 function renderProjects() {
   const box = document.getElementById("projectsBody");
+  if (!projectsData.loaded) {
+    box.innerHTML = '<p class="note">Scanning…</p>';
+    return;
+  }
   const rows = projectsData.items.map(p => `
     <tr>
       <td><div class="title">${escapeHtml(p.name)}${p.exists ? "" : ' <span class="chip">missing on disk</span>'}</div>
@@ -1175,7 +1186,7 @@ function renderProjects() {
     <p class="note" style="margin-top:12px">Not linked to any project: ${u.entries} item(s), ${u.size_human}
       (plans, skills, Hermes sessions and others that do not record a working directory).</p>`;
 }
-const projectsData = { items: [], unassigned: null };
+const projectsData = { items: [], unassigned: null, loaded: false };
 
 document.getElementById("projectsBody").addEventListener("click", (e) => {
   const show = e.target.dataset.projectShow;
@@ -1194,15 +1205,17 @@ function confirmProjectDelete(project) {
     text: `Delete everything AgenticVisor holds for “${project.name}”?`,
     warn: true,
     note: `${project.sessions} session(s) and the other ${project.entries - project.sessions} item(s) listed for this project move to the trash. ` +
-      "For Claude Code that includes transcripts, sub-agent folders, session data, memory and history entries. " +
+      "For Claude Code that includes transcripts, sub-agent folders, session data, memory and history entries; for Cursor, its conversations and project files. " +
       `Your repository folder ${project.project} is not touched.`,
     onConfirm: async () => {
       const res = await (await fetch("/api/project_delete", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: project.project }),
       })).json();
       if (!res.ok) { flash(res.error); return; }
-      const skipped = res.skipped.length ? ` ${res.skipped.length} skipped (${res.skipped[0].reason}).` : "";
-      const warned = res.warnings.length ? ` ${res.warnings.length} warning(s): ${res.warnings[0]}` : "";
+      const skippedList = res.skipped || [];
+      const warnings = res.warnings || [];
+      const skipped = skippedList.length ? ` ${skippedList.length} skipped (${skippedList[0].reason}).` : "";
+      const warned = warnings.length ? ` ${warnings.length} warning(s): ${warnings[0]}` : "";
       flash(`Moved ${res.claude_sessions} session(s) and ${res.other_items} other item(s) to the trash.${skipped}${warned}`);
       await loadScan();
     },
@@ -1233,7 +1246,8 @@ document.getElementById("moveConfirm").onclick = async () => {
   })).json();
   if (!res.ok) { document.getElementById("moveError").textContent = res.error; return; }
   document.getElementById("moveDialog").close();
-  flash(`Session moved to ${res.project}.` + (res.warnings.length ? ` Warning: ${res.warnings[0]}` : ""));
+  const warnings = res.warnings || [];
+  flash(`Session moved to ${res.project}.` + (warnings.length ? ` Warning: ${warnings[0]}` : ""));
   await loadScan();
 };
 
@@ -1945,6 +1959,7 @@ function canPreview(entry) {
   if (entry.tool === "cursor-cli") {
     return p.includes("/agent-transcripts/") || /\/chats\/[^/]+\/[^/]+$/.test(p);
   }
+  if (entry.tool === "cursor-desktop") return p.includes("state.vscdb#");
   return false;
 }
 

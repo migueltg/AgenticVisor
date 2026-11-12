@@ -67,7 +67,7 @@ pub fn remember(folder_name: &str, path: &str) {
     }
 }
 
-fn hint(folder_name: &str) -> Option<String> {
+pub fn hint(folder_name: &str) -> Option<String> {
     hints().lock().ok()?.get(folder_name).cloned()
 }
 
@@ -209,7 +209,7 @@ pub struct ClaudeSession {
     pub id: String,
 }
 
-fn is_session_id(text: &str) -> bool {
+pub(crate) fn is_session_id(text: &str) -> bool {
     text.len() == 36 && text.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
 }
 
@@ -236,14 +236,14 @@ pub fn claude_session(home: &Path, path: &str) -> Result<ClaudeSession, String> 
 impl ClaudeSession {
     /// Folders and files other than the transcript that belong to this session.
     fn companions(&self, home: &Path) -> Vec<PathBuf> {
-        [
+        let mut parts = vec![
             self.folder.join(&self.id),
             home.join(".claude").join("session-env").join(&self.id),
             home.join(".claude").join("file-history").join(&self.id),
-        ]
-        .into_iter()
-        .filter(|p| p.exists())
-        .collect()
+        ];
+        // A session started from Claude Desktop also has a metadata file in the app's folder.
+        parts.extend(crate::desktop_sessions::metadata_for_cli_session(home, &self.id));
+        parts.into_iter().filter(|p| p.exists()).collect()
     }
 }
 
@@ -429,6 +429,8 @@ pub fn delete_project(home: &Path, trash_dir: &Path, backups_dir: &Path, project
             Err(error) => warnings.push(error),
         }
     }
+    // A Cursor conversation can show up as a transcript and as a chat folder; one delete covers both.
+    let mut conversations_done: Vec<String> = Vec::new();
     for entry in others {
         if !entry.actionable {
             continue;
@@ -437,15 +439,76 @@ pub fn delete_project(home: &Path, trash_dir: &Path, backups_dir: &Path, project
             skipped.push(json!({"path": entry.path, "reason": "Cursor is running: close it and try again"}));
             continue;
         }
-        let result = trash::move_to_trash(home, trash_dir, &entry.path);
+        if let Some(id) = crate::cursor_sessions::conversation_id_of_path(home, &entry.path) {
+            if conversations_done.contains(&id) {
+                continue;
+            }
+            conversations_done.push(id);
+        }
+        let result = delete_path(home, trash_dir, backups_dir, &entry.path, cursor_running);
         if result["ok"] == json!(true) {
             moved += 1;
         } else {
-            warnings.push(format!("{}: {}", entry.path, result["error"].as_str().unwrap_or("could not move")));
+            let error = result["error"].as_str().unwrap_or("could not delete").to_string();
+            if error.starts_with("Cursor is running") {
+                skipped.push(json!({"path": entry.path, "reason": error}));
+            } else {
+                warnings.push(format!("{}: {error}", entry.path));
+            }
+        }
+    }
+    // Claude Desktop's metadata files of this project's code sessions that had no transcript left.
+    for json_file in crate::desktop_sessions::code_session_jsons_for_project(home, project) {
+        if json_file.exists() && trash::move_to_trash(home, trash_dir, &json_file.to_string_lossy())["ok"] == json!(true) {
+            moved += 1;
         }
     }
     log_change(backups_dir, &format!("project {project} deleted: {sessions} Claude Code sessions, {moved} other items, {history_removed} history lines"));
     Ok(json!({"project": project, "claude_sessions": sessions, "other_items": moved, "history_removed": history_removed, "skipped": skipped, "warnings": warnings}))
+}
+
+// ---------- One entry point per action ----------
+
+fn wrap(result: Result<Value, String>) -> Value {
+    match result {
+        Ok(Value::Object(mut map)) => {
+            let mut out = serde_json::Map::new();
+            out.insert("ok".into(), json!(true));
+            out.append(&mut map);
+            Value::Object(out)
+        }
+        Ok(other) => json!({"ok": true, "value": other}),
+        Err(error) => json!({"ok": false, "error": error}),
+    }
+}
+
+/// Deletes what `path` stands for, completely. A Claude Code session, a Cursor
+/// conversation (transcript, chat folder or IDE chat key) and a Claude Desktop agent
+/// mode session are deleted with everything that belongs to them; any other path just
+/// goes to the trash. Returns {"ok": true, ...} or {"ok": false, "error"}.
+pub fn delete_path(home: &Path, trash_dir: &Path, backups_dir: &Path, path: &str, cursor_running: bool) -> Value {
+    if claude_session(home, path).is_ok() {
+        return wrap(delete_claude_session(home, trash_dir, backups_dir, path));
+    }
+    if let Some(id) = crate::cursor_sessions::conversation_id_of_path(home, path) {
+        return wrap(crate::cursor_sessions::delete_conversation(home, trash_dir, backups_dir, &id, cursor_running));
+    }
+    if crate::desktop_sessions::agent_session(home, path).is_some() {
+        return wrap(crate::desktop_sessions::delete_agent_mode_session(home, trash_dir, backups_dir, path));
+    }
+    trash::move_to_trash(home, trash_dir, path)
+}
+
+/// Moves a session to another project: a Claude Code session, or a Cursor conversation
+/// made with the command line agent.
+pub fn move_path(home: &Path, backups_dir: &Path, path: &str, target: &str) -> Result<Value, String> {
+    if claude_session(home, path).is_ok() {
+        return move_claude_session(home, backups_dir, path, target);
+    }
+    if crate::cursor_sessions::conversation_id_of_path(home, path).is_some() {
+        return crate::cursor_sessions::move_conversation(home, path, target);
+    }
+    Err("This kind of session cannot be moved".into())
 }
 
 // ---------- Listing ----------

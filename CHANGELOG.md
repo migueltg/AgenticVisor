@@ -10,13 +10,20 @@ All notable changes to this project are documented here. The format follows
 
 - Projects view and a "group by project" option in the list. Entries are grouped by
   the repository they belong to, across Claude Code, Cursor and Codex.
-- Move a Claude Code session to another project. The transcript is not edited and
-  `claude --resume` finds the session again.
+- Move a Claude Code session or a Cursor command line conversation to another
+  project. A Claude Code transcript is not edited and `claude --resume` finds it again;
+  a Cursor chat keeps its id and `cursor-agent --resume` finds it again. Cursor IDE
+  chats and Claude Desktop agent mode sessions cannot be moved.
 - Delete a Claude Code project's data in one action: its sessions, memory and
   history entries go to the trash. The repository folder is never touched.
 - Work plans written by Claude Code are assigned to the project of the session that
   wrote them.
 - Interface tests in `tests/ui/`, run against a fake home folder.
+- Cursor IDE chats that a workspace lists, and Claude Desktop agent mode sessions, are
+  listed one by one with their project. Agent mode sessions were a single folder before.
+- Cursor and Claude Desktop sessions are deleted completely: a Cursor conversation with
+  its IDE rows, workspace chat list entries (backed up first) and folders; a Claude
+  Desktop session with its metadata file.
 
 ### Changed
 
@@ -28,6 +35,13 @@ All notable changes to this project are documented here. The format follows
   moved to another project is listed under the project it lives in. Reading it no
   longer loads whole transcripts into memory.
 - Remaining Spanish labels in the interface are translated.
+- A Cursor project folder is linked to its repository through paths the dashboard
+  already knows (Claude Code transcripts, Cursor workspaces and chat metadata), so
+  names with dots or underscores resolve. Projects that cannot be resolved to a real
+  path are no longer given an invented one.
+- The folder of a Cursor project (canvases, MCP state, terminals) is part of the
+  project and goes with it when the project is deleted.
+- Emptied `chats/<hash>` folders are removed after a chat is moved or deleted.
 
 ## [0.1.0-beta.4] - 2026-11-06
 

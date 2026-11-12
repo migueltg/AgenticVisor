@@ -61,12 +61,21 @@ how much is safe to clean. It also shows which agents are running right now and
 lists the backups the dashboard made, so you can move them to the trash.
 
 **Projects.** Sessions are grouped by the repository they belong to, across tools:
-a project shows its Claude Code, Cursor and Codex data together. From there you can
-**move a Claude Code session to another project**, delete a session **completely**
-(transcript, sub-agent folder, session data, file history and history entries) and
-delete **everything a project holds**. All of it goes to the trash, and the
-repository folder itself is never touched. Plans, skills and Hermes sessions record
-no working directory, so they are listed as "No project".
+a project shows its Claude Code, Claude Desktop, Cursor and Codex data together.
+From there you can **delete a session completely** and **delete everything a project
+holds**. All of it goes to the trash, and the repository folder itself is never
+touched. What "completely" covers depends on the tool:
+
+| Tool | Deleting a session removes | Moving it to another project |
+|------|----------------------------|------------------------------|
+| Claude Code | transcript, sub-agent folder, session data, file history, history entries, and the Claude Desktop metadata file | Yes. The transcript is not edited and `claude --resume` finds it again. |
+| Cursor command line | chat folder and transcript | Yes. Checked with `cursor-agent --resume`. |
+| Cursor IDE | its rows in Cursor's database and its place in the workspace chat lists (each backed up first), and its transcript. Needs Cursor closed. | No: the lists live in the IDE's databases and cannot be checked from here. |
+| Claude Desktop agent mode | its folder and its metadata file | No: the app keeps its own state about the project. |
+
+Plans, skills and Hermes sessions record no working directory, so they are listed as
+"No project". Only some Cursor IDE chats can be linked to a project (the ones a workspace
+lists or that have a transcript, about 7% on one real install); the rest show no project.
 
 **Per agent (Claude, Cursor).**
 - **Sessions**: conversations, with a readable preview (JSONL, chat databases,

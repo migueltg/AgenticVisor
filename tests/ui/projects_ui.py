@@ -5,6 +5,7 @@ session completely and deleting a project. Run `cargo build` first.
 
 Needs Playwright for Python and Google Chrome. All data comes from a fake home.
 """
+import json
 import os
 import sys
 import tempfile
@@ -36,7 +37,7 @@ def main():
 
         # Projects view lists both repositories
         page.goto(harness.BASE + "/#projects")
-        page.wait_for_selector("#projectsBody tbody tr")
+        page.wait_for_selector("#projectsBody [data-project-show]")
         text = page.inner_text("#projectsBody")
         check("projects view lists both repositories", "alpha" in text and "beta" in text)
         check("menu says Overview, not Resumen", "Overview" in page.inner_text(".nav-sections") and "Resumen" not in page.inner_text(".nav-sections"))
@@ -62,9 +63,26 @@ def main():
         page.select_option("#moveSelect", fx.beta)
         page.click("#moveConfirm")
         page.wait_for_function("!document.getElementById('moveDialog').open")
-        moved = {pr["project"]: pr for pr in api("/api/projects")["items"]}
-        check("the session now belongs to beta", moved[fx.beta]["sessions"] == 2 and moved[fx.alpha]["sessions"] == 1)
+        claude_sessions = lambda project: sum(
+            1 for e in api("/api/scan")["entries"]
+            if e["tool"] == "claude-code" and e["path"].endswith(".jsonl") and e.get("project") == project)
+        check("the session now belongs to beta", claude_sessions(fx.beta) == 2 and claude_sessions(fx.alpha) == 1)
         check("its transcript is in beta's folder", os.path.isfile(fx.transcript(fx.beta, "a2")) and not os.path.exists(fx.transcript(fx.alpha, "a2")))
+
+        # Move a Cursor command line conversation from alpha to beta
+        page.goto(harness.BASE + "/#table/all:")
+        page.wait_for_selector("#tbody tr")
+        cursor_row = page.locator(f'#tbody tr:has(.path:text("{IDS["cursor"]}"))').first
+        check("Cursor conversations offer Move", cursor_row.locator("[data-move]").count() == 1)
+        cursor_row.locator("[data-move]").click()
+        page.wait_for_selector("#moveDialog[open]")
+        page.select_option("#moveSelect", fx.beta)
+        page.click("#moveConfirm")
+        page.wait_for_function("!document.getElementById('moveDialog').open")
+        check("its chat folder and transcript are under beta, with the cwd updated",
+              os.path.isdir(fx.cursor_chat(fx.beta)) and os.path.isdir(fx.cursor_transcript(fx.beta))
+              and not os.path.exists(fx.cursor_chat(fx.alpha)) and not os.path.exists(fx.cursor_transcript(fx.alpha))
+              and json.load(open(os.path.join(fx.cursor_chat(fx.beta), "meta.json")))["cwd"] == fx.beta)
 
         # Delete a session with the row button: everything that belongs to it goes
         page.goto(harness.BASE + "/#table/all:")
@@ -91,7 +109,8 @@ def main():
         check("project delete warns that the repository is not touched", "is not touched" in page.inner_text("#actionNote"))
         page.click("#actionConfirm")
         page.wait_for_function("document.getElementById('flash').textContent.includes('Moved')")
-        check("the project's data is gone", not os.path.exists(fx.folder(fx.beta)))
+        check("the project's data is gone, Cursor conversation included",
+              not os.path.exists(fx.folder(fx.beta)) and not os.path.exists(fx.cursor_chat(fx.beta)) and not os.path.exists(fx.cursor_transcript(fx.beta)))
         check("no history line of the project is left", IDS["b1"] not in fx.history_text() and IDS["a2"] not in fx.history_text())
         check("the repositories on disk are untouched",
               all(os.path.isfile(os.path.join(r, "README.md")) for r in (fx.alpha, fx.beta)))

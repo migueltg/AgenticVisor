@@ -1,5 +1,6 @@
 //! Adapter for ~/.cursor (Cursor CLI / agent).
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -40,28 +41,37 @@ fn file_name(path: &Path) -> String {
 /// Category, title and note of a Cursor project, derived from its folder name.
 /// macOS temporary workspaces are marked as orphans; names made only of
 /// digits are not paths and are not treated as orphans.
-fn classify_project_dir(dirname: &str) -> (&'static str, String, String) {
+///
+/// The fourth value is the project path, only when the folder name could be turned back
+/// into a path that exists: a path known from somewhere else, or one found on disk.
+fn classify_project_dir(dirname: &str, known: &HashMap<String, String>) -> (&'static str, String, String, Option<String>) {
+    // A path known from somewhere else wins over any guess made from the name.
+    if let Some(path) = crate::cursor_sessions::project_for_slug(known, dirname) {
+        return ("sessions", path.clone(), String::new(), Some(path));
+    }
     if dirname.starts_with("var-folders-") {
         return (
             "orphaned",
             dirname.to_string(),
             "macOS temporary workspace (/var/folders/...), almost certainly obsolete".to_string(),
+            None,
         );
     }
     if !dirname.is_empty() && dirname.chars().all(|c| c.is_ascii_digit()) {
-        return ("other", dirname.to_string(), "Numeric folder: cannot be matched to any project".to_string());
+        return ("other", dirname.to_string(), "Numeric folder: cannot be matched to any project".to_string(), None);
     }
-    if let Some(resolved) = resolve_dashed_path(dirname, "/") {
-        return ("sessions", resolved, String::new());
+    if let Some(path) = resolve_dashed_path(dirname, "/") {
+        return ("sessions", path.clone(), String::new(), Some(path));
     }
     (
         "orphaned",
         format!("/{}", dirname.replace('-', "/")),
         "No disk path matches this folder name: probably a deleted or moved project".to_string(),
+        None,
     )
 }
 
-fn scan_agent_transcripts(proj: &Path, project_title: &str, out: &mut Vec<Entry>) {
+fn scan_agent_transcripts(proj: &Path, project_title: &str, project: Option<&str>, out: &mut Vec<Entry>) {
     let dir = proj.join(TRANSCRIPTS_DIR);
     if !dir.is_dir() {
         return;
@@ -75,13 +85,14 @@ fn scan_agent_transcripts(proj: &Path, project_title: &str, out: &mut Vec<Entry>
             None
         }
         .unwrap_or_else(|| "(no user messages)".to_string());
-        out.push(
-            Entry::new(&conv.to_string_lossy(), "cursor-cli", "sessions", &conv.to_string_lossy())
-                .with_stats(size, count, mtime)
-                .title(title)
-                .project(project_title)
-                .note(format!("Agent conversation · Project: {project_title}")),
-        );
+        let mut entry = Entry::new(&conv.to_string_lossy(), "cursor-cli", "sessions", &conv.to_string_lossy())
+            .with_stats(size, count, mtime)
+            .title(title)
+            .note(format!("Agent conversation · Project: {project_title}"));
+        if let Some(project) = project {
+            entry = entry.project(project);
+        }
+        out.push(entry);
     }
 }
 
@@ -96,12 +107,21 @@ fn scan_chats(root: &Path, out: &mut Vec<Entry>) {
             let title = if db.is_file() { cursor_chat_title(&db) } else { None }
                 .unwrap_or_else(|| "(untitled)".to_string());
             let (size, count, mtime) = dir_stats(&chat_dir, &[]);
-            out.push(
-                Entry::new(&chat_dir.to_string_lossy(), "cursor-cli", "sessions", &chat_dir.to_string_lossy())
-                    .with_stats(size, count, mtime)
-                    .title(title)
-                    .note("Cursor chat"),
-            );
+            let mut entry = Entry::new(&chat_dir.to_string_lossy(), "cursor-cli", "sessions", &chat_dir.to_string_lossy())
+                .with_stats(size, count, mtime)
+                .title(title)
+                .note("Cursor chat");
+            // The chat's metadata records the folder it was started in.
+            let cwd = fs::read_to_string(chat_dir.join("meta.json"))
+                .ok()
+                .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+                .and_then(|meta| meta.get("cwd").and_then(|c| c.as_str()).map(|c| c.trim_end_matches('/').to_string()))
+                .filter(|c| !c.is_empty());
+            if let Some(cwd) = cwd {
+                entry.note = format!("Cursor chat · Project: {cwd}");
+                entry = entry.project(cwd);
+            }
+            out.push(entry);
         }
     }
 }
@@ -209,17 +229,21 @@ pub fn scan(home: &Path) -> Vec<Entry> {
 
     let projects_dir = root.join("projects");
     if projects_dir.is_dir() {
+        let known = crate::cursor_sessions::known_paths(home);
         for proj in sorted_children(&projects_dir).into_iter().filter(|p| p.is_dir()) {
             let name = file_name(&proj);
-            let (category, title, note) = classify_project_dir(&name);
+            let (category, title, note, project) = classify_project_dir(&name, &known);
             let (size, count, mtime) = dir_stats(&proj, &[TRANSCRIPTS_DIR]);
-            out.push(
-                Entry::new(&proj.to_string_lossy(), "cursor-cli", category, &proj.to_string_lossy())
-                    .with_stats(size, count, mtime)
-                    .title(title.clone())
-                    .note(note),
-            );
-            scan_agent_transcripts(&proj, &title, &mut out);
+            let mut entry = Entry::new(&proj.to_string_lossy(), "cursor-cli", category, &proj.to_string_lossy())
+                .with_stats(size, count, mtime)
+                .title(title.clone())
+                .note(note);
+            // What hangs from the project folder (canvases, MCP state, terminals) belongs to the project.
+            if let Some(project) = &project {
+                entry = entry.project(project.clone());
+            }
+            out.push(entry);
+            scan_agent_transcripts(&proj, &title, project.as_deref(), &mut out);
         }
     }
 

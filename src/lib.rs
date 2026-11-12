@@ -11,6 +11,8 @@ pub mod fsutil;
 pub mod artifacts;
 pub mod config;
 pub mod cursor_chats;
+pub mod cursor_sessions;
+pub mod desktop_sessions;
 pub mod extensions;
 pub mod preview;
 pub mod plans;

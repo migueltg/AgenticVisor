@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use serde_json::{json, Map, Value};
 
 use crate::search::index::{self, SharedIndex, MIN_QUERY_CHARS};
-use crate::{artifacts, backups, browse, config, cursor_chats, extensions, preview, projects, runtime, scanner, trash, usage};
+use crate::{artifacts, backups, browse, config, extensions, preview, projects, runtime, scanner, trash, usage};
 
 /// What the API needs to answer any request.
 pub struct Ctx {
@@ -124,23 +124,19 @@ fn u64_field(body: &Value, name: &str) -> u64 {
 fn post(ctx: &Ctx, path: &str, body: &Value) -> Reply {
     match path {
         "/api/trash" => {
+            let cursor_running = runtime::is_running(&runtime::process_names(), "cursor-desktop");
             let mut results = Map::new();
             for p in body.get("paths").and_then(Value::as_array).into_iter().flatten() {
                 if let Some(p) = p.as_str() {
-                    // A Claude Code session is deleted with everything that belongs to it.
-                    let result = if projects::claude_session(&ctx.home, p).is_ok() {
-                        action(projects::delete_claude_session(&ctx.home, &ctx.trash_dir(), &ctx.backups_dir(), p))
-                    } else {
-                        trash::move_to_trash(&ctx.home, &ctx.trash_dir(), p)
-                    };
-                    results.insert(p.to_string(), result);
+                    // Sessions are deleted with everything that belongs to them.
+                    results.insert(p.to_string(), projects::delete_path(&ctx.home, &ctx.trash_dir(), &ctx.backups_dir(), p, cursor_running));
                 }
             }
             ok(json!({"results": results}))
         }
         "/api/empty_trash" => ok(trash::empty_trash(&ctx.trash_dir())),
         "/api/session_move" => {
-            let result = projects::move_claude_session(&ctx.home, &ctx.backups_dir(), str_field(body, "path"), str_field(body, "target"));
+            let result = projects::move_path(&ctx.home, &ctx.backups_dir(), str_field(body, "path"), str_field(body, "target"));
             if result.is_ok() {
                 projects::save_hints(&ctx.data_dir);
             }
@@ -162,7 +158,10 @@ fn post(ctx: &Ctx, path: &str, body: &Value) -> Reply {
         }
         "/api/cursor_chat_delete" => {
             let running = runtime::is_running(&runtime::process_names(), "cursor-desktop");
-            let response = action(cursor_chats::delete_chat(&ctx.home, &ctx.backups_dir(), str_field(body, "key"), running));
+            let response = match crate::cursor_sessions::conversation_id_of_path(&ctx.home, str_field(body, "key")) {
+                Some(id) => action(crate::cursor_sessions::delete_conversation(&ctx.home, &ctx.trash_dir(), &ctx.backups_dir(), &id, running)),
+                None => json!({"ok": false, "error": "Not a Cursor conversation key"}),
+            };
             // Rebuild the search index so the deleted conversation stops appearing in results.
             if response["ok"] == json!(true) {
                 index::start(&ctx.index, ctx.home.clone(), ctx.index_db(), ctx.index_config());
