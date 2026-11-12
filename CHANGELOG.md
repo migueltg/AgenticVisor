@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Projects view and a "group by project" option in the list. Entries are grouped by
+  the repository they belong to, across Claude Code, Cursor and Codex.
+- Move a Claude Code session to another project. The transcript is not edited and
+  `claude --resume` finds the session again.
+- Delete a Claude Code project's data in one action: its sessions, memory and
+  history entries go to the trash. The repository folder is never touched.
+- Work plans written by Claude Code are assigned to the project of the session that
+  wrote them.
+- Interface tests in `tests/ui/`, run against a fake home folder.
+
+### Changed
+
+- Deleting a Claude Code session, from the row button or a multiple selection, now
+  moves everything that belongs to it: its sub-agent folder, its session data, its
+  file history and its history entries. Before, only the transcript moved and the
+  rest was left behind.
+- A project's path is the transcript "cwd" that matches the folder name, so a session
+  moved to another project is listed under the project it lives in. Reading it no
+  longer loads whole transcripts into memory.
+- Remaining Spanish labels in the interface are translated.
+
 ## [0.1.0-beta.4] - 2026-11-06
 
 ### Changed

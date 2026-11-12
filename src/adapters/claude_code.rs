@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::entry::Entry;
-use crate::fsutil::{classify_by_name, dir_stats, mtime_secs, read_frontmatter_field, resolve_dashed_path};
+use crate::fsutil::{classify_by_name, dir_stats, mtime_secs, read_frontmatter_field};
 use crate::titles::{
     claude_code_ai_title, claude_code_fallback_title, claude_code_history_index, claude_transcript_title,
 };
@@ -28,44 +28,9 @@ const KNOWN_SUBDIRS: &[(&str, &str, bool, &str)] = &[
 
 const HANDLED_SEPARATELY: &[&str] = &["projects", "sessions", "transcripts", "skills", "plugins", "plans"];
 
-fn cwd_from_transcripts(project_folder: &Path) -> Option<String> {
-    let mut files: Vec<PathBuf> = fs::read_dir(project_folder)
-        .ok()?
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|e| e == "jsonl"))
-        .collect();
-    files.sort();
-    for file in files {
-        let Ok(text) = fs::read_to_string(&file) else {
-            continue;
-        };
-        for line in text.lines().take(30) {
-            let Ok(d) = serde_json::from_str::<serde_json::Value>(line) else {
-                continue;
-            };
-            if let Some(cwd) = d.get("cwd").and_then(|v| v.as_str()) {
-                if !cwd.is_empty() {
-                    return Some(cwd.to_string());
-                }
-            }
-        }
-    }
-    None
-}
-
-/// (path, exists_on_disk) of the project. First the "cwd" from the transcripts;
-/// if none is readable, it is rebuilt from the folder name.
+/// (path, exists_on_disk) of the project; see `projects::project_path_for_folder`.
 fn project_path(project_folder: &Path) -> (String, bool) {
-    if let Some(cwd) = cwd_from_transcripts(project_folder) {
-        let exists = Path::new(&cwd).exists();
-        return (cwd, exists);
-    }
-    let name = project_folder.file_name().unwrap_or_default().to_string_lossy().into_owned();
-    if let Some(resolved) = resolve_dashed_path(&name, "/") {
-        return (resolved, true);
-    }
-    (format!("/{}", name.trim_matches('-').replace('-', "/")), false)
+    crate::projects::project_path_for_folder(project_folder)
 }
 
 fn sorted_children(dir: &Path) -> Vec<PathBuf> {
@@ -150,6 +115,7 @@ fn scan_projects(root: &Path, home: &Path, out: &mut Vec<Entry>) {
             out.push(
                 Entry::new(&item.to_string_lossy(), "claude-code", category, &item.to_string_lossy())
                     .with_stats(size, count, mtime)
+                    .project(project.clone())
                     .note(note),
             );
         }

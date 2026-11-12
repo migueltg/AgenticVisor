@@ -24,7 +24,14 @@ pub fn scan_cursor(cursor_root: &Path) -> Vec<Entry> {
 
 /// One entry per plan in Claude Code's plans folder under `claude_root` (~/.claude).
 pub fn scan_claude(claude_root: &Path) -> Vec<Entry> {
-    plan_entries(&claude_root.join("plans"), "claude-code", claude_plan)
+    let mut entries = plan_entries(&claude_root.join("plans"), "claude-code", claude_plan);
+    for entry in &mut entries {
+        if let Some(project) = crate::projects::claude_plan_project(claude_root, Path::new(&entry.path)) {
+            entry.note = format!("Work plan (Claude Code) · Project: {project}");
+            entry.project = Some(project);
+        }
+    }
+    entries
 }
 
 fn plan_entries(dir: &Path, tool: &str, describe: fn(&Path) -> (String, String)) -> Vec<Entry> {

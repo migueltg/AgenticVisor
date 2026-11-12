@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use serde_json::{json, Map, Value};
 
 use crate::search::index::{self, SharedIndex, MIN_QUERY_CHARS};
-use crate::{artifacts, backups, browse, config, cursor_chats, extensions, preview, runtime, scanner, trash, usage};
+use crate::{artifacts, backups, browse, config, cursor_chats, extensions, preview, projects, runtime, scanner, trash, usage};
 
 /// What the API needs to answer any request.
 pub struct Ctx {
@@ -45,6 +45,7 @@ impl Ctx {
 
 /// Starts the background indexing pass that runs at launch.
 pub fn start_initial_index(ctx: &Ctx) {
+    projects::load_hints(&ctx.data_dir);
     index::start(&ctx.index, ctx.home.clone(), ctx.index_db(), ctx.index_config());
 }
 
@@ -126,12 +127,29 @@ fn post(ctx: &Ctx, path: &str, body: &Value) -> Reply {
             let mut results = Map::new();
             for p in body.get("paths").and_then(Value::as_array).into_iter().flatten() {
                 if let Some(p) = p.as_str() {
-                    results.insert(p.to_string(), trash::move_to_trash(&ctx.home, &ctx.trash_dir(), p));
+                    // A Claude Code session is deleted with everything that belongs to it.
+                    let result = if projects::claude_session(&ctx.home, p).is_ok() {
+                        action(projects::delete_claude_session(&ctx.home, &ctx.trash_dir(), &ctx.backups_dir(), p))
+                    } else {
+                        trash::move_to_trash(&ctx.home, &ctx.trash_dir(), p)
+                    };
+                    results.insert(p.to_string(), result);
                 }
             }
             ok(json!({"results": results}))
         }
         "/api/empty_trash" => ok(trash::empty_trash(&ctx.trash_dir())),
+        "/api/session_move" => {
+            let result = projects::move_claude_session(&ctx.home, &ctx.backups_dir(), str_field(body, "path"), str_field(body, "target"));
+            if result.is_ok() {
+                projects::save_hints(&ctx.data_dir);
+            }
+            ok(action(result))
+        }
+        "/api/project_delete" => {
+            let running = runtime::is_running(&runtime::process_names(), "cursor-desktop");
+            ok(action(projects::delete_project(&ctx.home, &ctx.trash_dir(), &ctx.backups_dir(), str_field(body, "project"), running)))
+        }
         "/api/backups_delete" => {
             let names: Vec<String> = body
                 .get("names")
@@ -210,6 +228,7 @@ fn get(ctx: &Ctx, path: &str, query: &HashMap<String, String>) -> Reply {
     let q = |name: &str| query.get(name).map(String::as_str).unwrap_or("");
     match path {
         "/api/scan" => ok(scanner::scan_json(&ctx.home)),
+        "/api/projects" => ok(projects::list(&scanner::run_scan(&ctx.home).entries)),
         "/api/children" => ok(browse::list_children(&ctx.home, q("path"))),
         "/api/trash_info" => ok(trash::trash_info(&ctx.trash_dir())),
         "/api/usage" => ok(usage::summary(&usage::collect(&ctx.home))),

@@ -6,7 +6,8 @@ maintainers cannot test.
 
 ## Before you start
 
-- Run the tests: `cargo test`. They must pass.
+- Run the tests: `cargo test`. They must pass. If you change the interface, also run the
+  tests in `tests/ui/` (see the README); they use a fake home and never read real data.
 - Check your change against real data before you open a pull request. Run
   `agenticvisor scan-json` and compare the result with what the interface
   shows.

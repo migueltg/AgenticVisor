@@ -83,6 +83,8 @@ pub fn scan_json(home: &Path) -> Value {
     json!({
         "generated_at": chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
         "entries": entries,
+        // The projects list comes with the scan, so the interface does not scan twice.
+        "projects": crate::projects::list(&scan.entries),
         "summary": {
             "total_size_bytes": total_size,
             "total_entries": scan.entries.len(),
