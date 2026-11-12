@@ -73,7 +73,7 @@
   .usage-bar { height: 8px; border-radius: 99px; background: var(--border); overflow: hidden; margin-top: 6px; }
   .usage-bar > span { display: block; height: 100%; background: var(--accent); }
 
-  /* Resumen */
+  /* Overview */
   .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; min-width: 0; }
   .card .big { font-size: 26px; font-weight: 650; }
@@ -163,6 +163,10 @@
   .switch input:checked + span::after { transform: translateX(15px); }
   .switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+  .group-row td { background: var(--accent-soft); font-size: 13px; padding: 7px 14px; }
+  .project-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .move-field { display: grid; gap: 4px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+  .move-field select, .move-field input { width: 100%; }
   .backup-row { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
 
 /* Dialogs */
@@ -245,14 +249,15 @@
     </svg>
     <div>
       <h1>Agentic<br>Visor</h1>
-      <div class="sub" id="generatedAt">Escaneando…</div>
+      <div class="sub" id="generatedAt">Scanning…</div>
     </div>
   </div>
 
   <nav class="nav-sections">
     <div class="nav-section">
       <h3>General</h3>
-      <button class="nav-item" data-view="resumen">Resumen</button>
+      <button class="nav-item" data-view="resumen">Overview</button>
+      <button class="nav-item" data-view="projects">Projects</button>
       <button class="nav-item" data-feature="search" data-view="buscar">Search conversations</button>
     </div>
 
@@ -298,7 +303,7 @@
     <div class="view-head">
       <div>
         <div class="eyebrow">General</div>
-        <h1>Resumen</h1>
+        <h1>Overview</h1>
         <p>How much each thing takes up and what can be cleaned. Click a category to see it in the list.</p>
       </div>
     </div>
@@ -307,7 +312,7 @@
     <section id="usageSection" hidden>
       <div class="view-head" style="margin-top:34px; margin-bottom:0; padding-bottom:12px;">
         <div>
-          <div class="eyebrow">Claude · Consumo</div>
+          <div class="eyebrow">Claude · Usage</div>
           <h1 style="font-size:20px;">Session tokens</h1>
           <p>What Claude Code and Claude Desktop record for each response. Each response is counted once, even if the file repeats it.</p>
         </div>
@@ -315,6 +320,17 @@
       <div class="usage-grid" id="usageCards"></div>
       <div class="usage-details" id="usageDetails"></div>
     </section>
+  </section>
+
+  <section class="view" data-view-id="projects" hidden>
+    <div class="view-head">
+      <div>
+        <div class="eyebrow">General</div>
+        <h1>Projects</h1>
+        <p>Everything the tools keep for each repository: sessions, notes and workspace state. Deleting a project moves that data to the trash; the repository folder itself is never touched.</p>
+      </div>
+    </div>
+    <div id="projectsBody"></div>
   </section>
 
   <section class="view" data-view-id="buscar" hidden>
@@ -363,6 +379,9 @@
       </label>
       <label style="display:flex; align-items:center; gap:6px; color:var(--muted);">
         <input type="checkbox" id="plansOnly"> plans only
+      </label>
+      <label style="display:flex; align-items:center; gap:6px; color:var(--muted);">
+        <input type="checkbox" id="groupByProject"> group by project
       </label>
     </div>
     <div class="table-wrap">
@@ -491,7 +510,7 @@
     <div class="warning-box" id="confirmWarning" hidden>
       ⚠ At least one of these items was modified today — it may be in use right now.
     </div>
-    <p class="note">They are moved to <code>AgenticVisor/trash/</code>, not deleted. You can recover them by hand as long as you do not empty that folder.</p>
+    <p class="note">They are moved to <code>AgenticVisor/trash/</code>, not deleted. You can recover them by hand as long as you do not empty that folder. A Claude Code session goes with its sub-agent folder, its session data and its history entries.</p>
   </div>
   <div class="dialog-actions">
     <button id="cancelTrash">Cancel</button>
@@ -509,6 +528,24 @@
     <button class="primary" id="confirmEmptyTrash" style="background:var(--config); border-color:var(--config);">
       Delete permanently
     </button>
+  </div>
+</dialog>
+
+<dialog id="moveDialog">
+  <div class="dialog-body">
+    <p id="moveText"></p>
+    <label class="move-field">Move to project
+      <select id="moveSelect"></select>
+    </label>
+    <label class="move-field">or a folder path
+      <input type="text" id="moveCustom" placeholder="/Users/you/dev/another-repo">
+    </label>
+    <p class="note">The session keeps working: Claude Code finds it by its id. A copy of the history is saved first. The folder must exist inside your home folder.</p>
+    <p class="note" id="moveError" style="color:var(--config)"></p>
+  </div>
+  <div class="dialog-actions">
+    <button id="moveCancel">Cancel</button>
+    <button class="primary" id="moveConfirm">Move</button>
   </div>
 </dialog>
 
@@ -624,7 +661,7 @@ const AGENTS = {
 };
 const CLEANUP_CATEGORIES = new Set(["cache", "orphaned"]);
 const VIEW_IDS = [
-  "resumen", "buscar", "table", "claude-skills", "claude-plugins", "claude-artifacts",
+  "resumen", "projects", "buscar", "table", "claude-skills", "claude-plugins", "claude-artifacts",
   "cursor-skills", "cursor-plugins", "canvases", "config-claude", "config-cursor",
 ];
 
@@ -700,6 +737,7 @@ function showView(viewId) {
       : b.dataset.view === viewId;
     b.classList.toggle("active", active);
   });
+  if (viewId === "projects") renderProjects();
   const hash = viewId === "table" ? `table/${state.filterKey}` : viewId;
   if (location.hash !== "#" + hash) history.replaceState(null, "", "#" + hash);
 }
@@ -742,7 +780,7 @@ document.querySelectorAll(".nav-item").forEach(btn => {
 
 // ---- Scan and list ----
 async function loadScan() {
-  document.getElementById("generatedAt").textContent = "Escaneando…";
+  document.getElementById("generatedAt").textContent = "Scanning…";
   const [scanRes, trashRes] = await Promise.all([
     fetch("/api/scan"),
     fetch("/api/trash_info"),
@@ -750,11 +788,14 @@ async function loadScan() {
   const data = await scanRes.json();
   const trashInfo = await trashRes.json();
   state.entries = data.entries;
+  projectsData.items = data.projects.items;
+  projectsData.unassigned = data.projects.unassigned;
+  if (state.view === "projects") renderProjects();
   state.selected.clear();
   state.expandedPaths.clear();
   state.childrenCache.clear();
   document.getElementById("generatedAt").textContent =
-    `${data.entries.length} entradas · ${data.generated_at}`;
+    `${data.entries.length} entries · ${data.generated_at}`;
   renderSummary(data.summary, data.entries, trashInfo);
   populateToolFilter(data.entries);
   populateProjectFilter(data.entries);
@@ -936,6 +977,11 @@ function filteredSorted() {
     if (av > bv) return 1 * state.sortDir;
     return 0;
   });
+  if (document.getElementById("groupByProject").checked) {
+    // Stable sort: inside each project the chosen order is kept. Entries without a project go last.
+    rows.sort((a, b) => (a.project ? 0 : 1) - (b.project ? 0 : 1) ||
+      (a.project || "").localeCompare(b.project || ""));
+  }
   return rows;
 }
 
@@ -1042,6 +1088,7 @@ function renderRow(e, depth) {
       <td title="${escapeAttr(e.last_modified_iso)}">${ageLabel(e.age_days)}</td>
       <td><div style="display:flex; gap:6px; flex-wrap:wrap;">
         ${canPreview(e) ? `<button class="small-btn" data-preview="${escapeAttr(e.path)}">View</button>` : ""}
+        ${canMove(e) ? `<button class="small-btn" data-move="${escapeAttr(e.id)}">Move…</button>` : ""}
         ${e.actionable
           ? `<button data-single-trash="${escapeAttr(e.id)}">Trash</button>`
           : `<span class="note">informational only</span>`}
@@ -1053,7 +1100,30 @@ function render() {
   const rows = visibleRows();
   const tbody = document.getElementById("tbody");
   document.getElementById("emptyMsg").style.display = rows.length ? "none" : "block";
-  tbody.innerHTML = rows.map(({ node, depth }) => renderRow(node, depth)).join("");
+  const grouped = document.getElementById("groupByProject").checked;
+  const totals = new Map();
+  if (grouped) {
+    for (const { node, depth } of rows) {
+      if (depth !== 0) continue;
+      const t = totals.get(node.project || "") || { count: 0, bytes: 0 };
+      t.count += 1;
+      t.bytes += node.size_bytes;
+      totals.set(node.project || "", t);
+    }
+  }
+  let html = "";
+  let lastGroup;
+  for (const { node, depth } of rows) {
+    if (grouped && depth === 0 && (node.project || "") !== lastGroup) {
+      lastGroup = node.project || "";
+      const t = totals.get(lastGroup);
+      html += `<tr class="group-row"><td colspan="9"><strong>${lastGroup ? escapeHtml(lastGroup.split(/[\\/]/).pop()) : "No project"}</strong>
+        ${lastGroup ? `<span class="note">${escapeHtml(lastGroup)}</span>` : ""}
+        <span class="note"> · ${t.count} item(s) · ${humanSize(t.bytes)}</span></td></tr>`;
+    }
+    html += renderRow(node, depth);
+  }
+  tbody.innerHTML = html;
   updateSelectionBar();
 }
 
@@ -1068,9 +1138,104 @@ function updateSelectionBar() {
       if (node) totalBytes += node.size_bytes;
     }
     document.getElementById("selectionSummary").textContent =
-      `${n} elemento(s) seleccionados · ${humanSize(totalBytes)}`;
+      `${n} item(s) selected · ${humanSize(totalBytes)}`;
   }
 }
+
+// ---- Projects ----
+// A Claude Code session: ~/.claude/projects/<folder>/<session id>.jsonl
+const CLAUDE_SESSION = /[\\/]\.claude[\\/]projects[\\/][^\\/]+[\\/][0-9a-f-]{36}\.jsonl$/;
+
+function canMove(entry) {
+  return entry.tool === "claude-code" && CLAUDE_SESSION.test(entry.path);
+}
+
+// Rendered from the last scan; nothing is scanned again.
+function renderProjects() {
+  const box = document.getElementById("projectsBody");
+  const rows = projectsData.items.map(p => `
+    <tr>
+      <td><div class="title">${escapeHtml(p.name)}${p.exists ? "" : ' <span class="chip">missing on disk</span>'}</div>
+        <div class="path">${escapeHtml(p.project)}</div></td>
+      <td>${p.tools.map(t => `<span class="chip">${escapeHtml(t)}</span>`).join(" ")}</td>
+      <td>${p.sessions}</td>
+      <td>${p.size_human}</td>
+      <td>${dayOf(p.last_modified)}</td>
+      <td><div class="project-actions">
+        <button class="small-btn" data-project-show="${escapeAttr(p.project)}">Show</button>
+        <button class="small-btn danger-small" data-project-delete="${escapeAttr(p.project)}">Delete data…</button>
+      </div></td>
+    </tr>`).join("");
+  const u = projectsData.unassigned || { entries: 0, size_human: "0B" };
+  box.innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr><th>Project</th><th>Tools</th><th>Sessions</th><th>Size</th><th>Last activity</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="6" class="note">No projects found.</td></tr>'}</tbody>
+    </table></div>
+    <p class="note" style="margin-top:12px">Not linked to any project: ${u.entries} item(s), ${u.size_human}
+      (plans, skills, Hermes sessions and others that do not record a working directory).</p>`;
+}
+const projectsData = { items: [], unassigned: null };
+
+document.getElementById("projectsBody").addEventListener("click", (e) => {
+  const show = e.target.dataset.projectShow;
+  if (show) {
+    document.getElementById("projectFilter").value = show;
+    goTable("all:");
+    return;
+  }
+  const del = e.target.dataset.projectDelete;
+  if (del) confirmProjectDelete(projectsData.items.find(p => p.project === del));
+});
+
+function confirmProjectDelete(project) {
+  if (!project) return;
+  openAction({
+    text: `Delete everything AgenticVisor holds for “${project.name}”?`,
+    warn: true,
+    note: `${project.sessions} session(s) and the other ${project.entries - project.sessions} item(s) listed for this project move to the trash. ` +
+      "For Claude Code that includes transcripts, sub-agent folders, session data, memory and history entries. " +
+      `Your repository folder ${project.project} is not touched.`,
+    onConfirm: async () => {
+      const res = await (await fetch("/api/project_delete", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: project.project }),
+      })).json();
+      if (!res.ok) { flash(res.error); return; }
+      const skipped = res.skipped.length ? ` ${res.skipped.length} skipped (${res.skipped[0].reason}).` : "";
+      const warned = res.warnings.length ? ` ${res.warnings.length} warning(s): ${res.warnings[0]}` : "";
+      flash(`Moved ${res.claude_sessions} session(s) and ${res.other_items} other item(s) to the trash.${skipped}${warned}`);
+      await loadScan();
+    },
+  });
+}
+
+// ---- Move a session to another project ----
+const moveState = { entry: null };
+
+function openMove(entry) {
+  moveState.entry = entry;
+  document.getElementById("moveError").textContent = "";
+  document.getElementById("moveCustom").value = "";
+  document.getElementById("moveText").textContent = `Move “${entry.title || entry.path}” to another project.`;
+  const options = projectsData.items.filter(p => p.exists && p.project !== entry.project);
+  document.getElementById("moveSelect").innerHTML = '<option value="">Choose a project…</option>' +
+    options.map(p => `<option value="${escapeAttr(p.project)}">${escapeHtml(p.name)} — ${escapeHtml(p.project)}</option>`).join("");
+  document.getElementById("moveDialog").showModal();
+}
+
+document.getElementById("moveCancel").onclick = () => document.getElementById("moveDialog").close();
+document.getElementById("moveConfirm").onclick = async () => {
+  const target = document.getElementById("moveCustom").value.trim() || document.getElementById("moveSelect").value;
+  if (!target) { document.getElementById("moveError").textContent = "Choose a project or type a folder path."; return; }
+  const res = await (await fetch("/api/session_move", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: moveState.entry.path, target }),
+  })).json();
+  if (!res.ok) { document.getElementById("moveError").textContent = res.error; return; }
+  document.getElementById("moveDialog").close();
+  flash(`Session moved to ${res.project}.` + (res.warnings.length ? ` Warning: ${res.warnings[0]}` : ""));
+  await loadScan();
+};
 
 function populateProjectFilter(entries) {
   const projects = [...new Set(entries.map(e => e.project).filter(Boolean))].sort();
@@ -1202,6 +1367,11 @@ document.getElementById("tbody").addEventListener("click", (e) => {
     openPreview(e.target.dataset.preview);
     return;
   }
+  if (e.target.dataset.move) {
+    const entry = findNodeById(e.target.dataset.move);
+    if (entry) openMove(entry);
+    return;
+  }
   const id = e.target.dataset.singleTrash;
   if (id) {
     const entry = findNodeById(id);
@@ -1211,7 +1381,7 @@ document.getElementById("tbody").addEventListener("click", (e) => {
 
 document.getElementById("trashSelectedBtn").onclick = () => {
   const ids = [...state.selected];
-  openConfirm(ids, `${ids.length} elemento(s) seleccionados`);
+  openConfirm(ids, `${ids.length} item(s) selected`);
 };
 
 document.getElementById("toolFilter").onchange = render;
@@ -1219,6 +1389,7 @@ document.getElementById("projectFilter").onchange = render;
 document.getElementById("searchInput").oninput = render;
 document.getElementById("cleanupOnly").onchange = render;
 document.getElementById("plansOnly").onchange = render;
+document.getElementById("groupByProject").onchange = render;
 document.getElementById("staleFilter").onchange = render;
 
 document.querySelectorAll("th[data-sort]").forEach(th => {

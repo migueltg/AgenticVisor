@@ -60,6 +60,14 @@ Builds are not signed yet, so macOS asks you to confirm before the first launch.
 how much is safe to clean. It also shows which agents are running right now and
 lists the backups the dashboard made, so you can move them to the trash.
 
+**Projects.** Sessions are grouped by the repository they belong to, across tools:
+a project shows its Claude Code, Cursor and Codex data together. From there you can
+**move a Claude Code session to another project**, delete a session **completely**
+(transcript, sub-agent folder, session data, file history and history entries) and
+delete **everything a project holds**. All of it goes to the trash, and the
+repository folder itself is never touched. Plans, skills and Hermes sessions record
+no working directory, so they are listed as "No project".
+
 **Per agent (Claude, Cursor).**
 - **Sessions**: conversations, with a readable preview (JSONL, chat databases,
   plans) and paging. A Cursor Desktop conversation can be deleted from its
@@ -142,6 +150,7 @@ src/extensions.rs      skills and plugins
 src/config.rs          configuration catalogue, masking and safe writes
 src/artifacts.rs       Claude publications and Cursor canvases
 src/usage.rs           token usage per session
+src/projects.rs        projects: grouping, moving and deleting sessions and projects
 src/trash.rs           trash and emptying it
 src/backups.rs         backup inventory, moved to the trash
 src/cursor_chats.rs    deletes one Cursor Desktop conversation
@@ -162,6 +171,9 @@ cargo test
 
 The tests use temporary home directories and never touch your real files. The
 same tests run on Linux, macOS and Windows in continuous integration.
+
+The interface tests in `tests/ui/` drive the real interface in Chrome against a fake
+home folder (needs Playwright for Python): `python3 tests/ui/projects_ui.py`.
 
 ## Platform support
 

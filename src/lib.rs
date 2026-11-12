@@ -14,6 +14,7 @@ pub mod cursor_chats;
 pub mod extensions;
 pub mod preview;
 pub mod plans;
+pub mod projects;
 pub mod pricing;
 pub mod runtime;
 pub mod scanner;
