@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-beta.5] - 2026-11-12
+
 ### Added
 
 - Projects view and a "group by project" option in the list. Entries are grouped by
