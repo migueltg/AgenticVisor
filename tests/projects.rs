@@ -266,6 +266,9 @@ fn a_project_left_with_only_its_memory_can_still_be_deleted() {
     let repo = h.repo("leftover");
     fs::create_dir_all(h.folder_of(&repo).join("memory")).unwrap();
     fs::write(h.folder_of(&repo).join("memory/MEMORY.md"), "notes").unwrap();
+    // With no transcript to read the path from, the folder name cannot be turned back into a
+    // path on every platform; the app remembers the path (as it does after moving a session).
+    remember(&encode_folder(&repo.to_string_lossy()), &repo.to_string_lossy());
 
     let scan = run_scan(&h.home);
     assert!(list(&scan.entries)["items"].as_array().unwrap().iter().any(|i| i["project"] == repo.to_string_lossy().as_ref()));
